@@ -36,11 +36,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## Crate Overview
+# DDS Setup
 
-- `booster_types`: Shared data types and error definitions
-- `booster_dds`: Low-level DDS communication layer using Zenoh
-- `booster_client`: High-level client API for robot control
+Setting up the DDS communication layer to work with Booster robots involves configuring Zenoh. Please refer to the [DDS Setup Guide](docs/dds_setup.md) for detailed instructions.
 
 ## Contributing
 
