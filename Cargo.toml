@@ -12,9 +12,6 @@ repository = "https://github.com/IntelligentRobotics/booster-sdk"
 [workspace.lints.rust]
 # TODO: re-enable this once we have docs for everything
 # missing_docs = "warn"
-# TODO: replace this lint with cargo-machete, since it's broken
-# https://github.com/rust-lang/rust/issues/57274
-# unused_crate_dependencies = "warn"
 
 [workspace.lints.clippy]
 # enable clippy lints with priority -1
