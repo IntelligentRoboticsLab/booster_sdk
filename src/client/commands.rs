@@ -2,7 +2,7 @@
 //!
 //! This module provides ergonomic builder types for constructing robot control commands.
 
-use booster_types::{Direction, GripperMode, Hand, Posture, Transform};
+use crate::types::{Direction, Frame, GripperMode, Hand, Posture, Transform};
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
@@ -289,10 +289,10 @@ impl DexterousHandCommand {
 #[derive(Debug, Clone, Copy, TypedBuilder, Serialize, Deserialize)]
 pub struct FrameTransformQuery {
     /// Source frame
-    pub source: booster_types::Frame,
+    pub source: Frame,
 
     /// Destination frame
-    pub destination: booster_types::Frame,
+    pub destination: Frame,
 }
 
 #[cfg(test)]

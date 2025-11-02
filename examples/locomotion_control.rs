@@ -4,8 +4,8 @@
 //!
 //! Run with: cargo run --example `locomotion_control`
 
-use booster_client::{B1LocoClient, commands::MoveCommand};
-use booster_types::{Hand, RobotMode};
+use booster_sdk::client::{B1LocoClient, commands::MoveCommand};
+use booster_sdk::types::{Hand, RobotMode};
 use tokio::time::Duration;
 
 #[tokio::main]

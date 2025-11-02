@@ -155,39 +155,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "booster_client"
-version = "0.1.0"
-dependencies = [
- "booster_dds",
- "booster_types",
- "serde",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "typed-builder",
-]
-
-[[package]]
-name = "booster_dds"
-version = "0.1.0"
-dependencies = [
- "booster_types",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "uuid",
- "zenoh",
-]
-
-[[package]]
-name = "booster_types"
+name = "booster_sdk"
 version = "0.1.0"
 dependencies = [
  "glam",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "typed-builder",
+ "uuid",
+ "zenoh",
 ]
 
 [[package]]

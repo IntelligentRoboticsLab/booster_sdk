@@ -1,4 +1,4 @@
-//! Core types and data structures for the Booster Robotics SDK.
+//! Core domain types shared across the Booster Robotics SDK.
 
 mod error;
 mod low_level;

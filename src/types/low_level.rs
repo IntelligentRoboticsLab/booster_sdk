@@ -3,7 +3,7 @@
 //! These types describe the raw control and feedback messages exchanged with the
 //! Booster robot at the motor and sensor layer.
 
-use crate::motor::{MotorCommand, MotorState};
+use super::motor::{MotorCommand, MotorState};
 use serde::{Deserialize, Serialize};
 
 /// IMU (Inertial Measurement Unit) state.

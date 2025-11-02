@@ -3,13 +3,15 @@
 //! The `B1LocoClient` provides a high-level async API for controlling the B1 robot,
 //! including locomotion, arm manipulation, head control, and predefined gestures.
 
-use crate::commands::{
+use super::commands::{
     DexterousHandCommand, FrameTransformQuery, GripperCommand, HandPoseCommand,
     HandPoseWithAuxCommand, HandTransformCommand, HeadRotation, HeadRotationContinuous,
     MoveCommand,
 };
-use booster_dds::{RpcClient, RpcClientOptions};
-use booster_types::{DanceId, Direction, Frame, Hand, Result, RobotMode, Transform};
+use crate::{
+    dds::{RpcClient, RpcClientOptions},
+    types::{BoosterError, DanceId, Direction, Frame, Hand, Result, RobotMode, Transform},
+};
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 
@@ -71,8 +73,8 @@ impl B1LocoClient {
     /// # Example
     /// ```no_run
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// use booster_client::B1LocoClient;
-    /// use booster_types::RobotMode;
+    /// use booster_sdk::client::B1LocoClient;
+    /// use booster_sdk::types::RobotMode;
     ///
     /// let client = B1LocoClient::new().await?;
     /// client.change_mode(RobotMode::Walking).await?;
@@ -123,8 +125,7 @@ impl B1LocoClient {
 
         let mode = response.mode;
 
-        RobotMode::try_from(mode)
-            .map_err(|()| booster_types::BoosterError::Other(format!("Invalid mode: {mode}")))
+        RobotMode::try_from(mode).map_err(|()| BoosterError::Other(format!("Invalid mode: {mode}")))
     }
 
     /// Move the robot with velocity control
@@ -141,7 +142,7 @@ impl B1LocoClient {
     /// # Example
     /// ```no_run
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// use booster_client::B1LocoClient;
+    /// use booster_sdk::client::B1LocoClient;
     ///
     /// let client = B1LocoClient::new().await?;
     /// // Move forward at 0.5 m/s

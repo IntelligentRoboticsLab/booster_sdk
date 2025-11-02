@@ -4,8 +4,8 @@
 //!
 //! Run with: cargo run --example `gripper_control`
 
-use booster_client::{B1LocoClient, commands::GripperCommand};
-use booster_types::{Hand, RobotMode};
+use booster_sdk::client::{B1LocoClient, commands::GripperCommand};
+use booster_sdk::types::{Hand, RobotMode};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,6 +1,6 @@
 //! RPC client for high-level API requests.
 
-use booster_types::{DdsError, Result, RpcError};
+use crate::types::{DdsError, Result, RpcError};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::time::{Duration, Instant};

@@ -5,15 +5,15 @@ A Rust SDK for controlling Booster robots based on [Booster Robotics C++ SDK](ht
 ## 🚧 Project Status
 
 This library is currently in early development. The core architecture and types are defined, but none of it has been tested on
-an actual robot yet. Specifically, the `booster_dds` crate's Zenoh communication layer is untested.
+an actual robot yet. Specifically, the `dds` module's Zenoh communication layer is untested.
 
 ## API Examples
 
 ### High-Level Locomotion Control
 
 ```rust
-use booster_client::B1LocoClient;
-use booster_types::{RobotMode, Hand};
+use booster_sdk::client::B1LocoClient;
+use booster_sdk::types::{RobotMode, Hand};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
