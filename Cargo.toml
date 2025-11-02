@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Team whIRLwind"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/IntelligentRobotics/booster-sdk"
+
+[workspace.lints.rust]
+# TODO: re-enable this once we have docs for everything
+# missing_docs = "warn"
+# TODO: replace this lint with cargo-machete, since it's broken
+# https://github.com/rust-lang/rust/issues/57274
+# unused_crate_dependencies = "warn"
+
+[workspace.lints.clippy]
+# enable clippy lints with priority -1
+# so that we can override certain ones with "allow"
+all = { level = "warn", priority = -1 }
+inline_always = "allow"
+pedantic = { level = "warn", priority = -1 }
+
+[workspace.dependencies]
+booster_client = { path = "crates/booster_client" }
+booster_types = { path = "crates/booster_types" }
+booster_dds = { path = "crates/booster_dds" }
+
+tokio = { version = "1.42", features = ["full"] }
+zenoh = { version = "1.0", features = ["unstable"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+typed-builder = "0.23.0"
+glam = { version = "0.29", features = ["serde"] }
+
+[workspace.metadata.cargo-shear]
+# Ignore the booster_client crate for shear analysis
+ignored = ["booster_client"]

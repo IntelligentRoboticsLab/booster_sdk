@@ -1,0 +1,20 @@
+[package]
+name = "booster_client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+booster_types.workspace = true
+booster_dds.workspace = true
+serde.workspace = true
+tracing.workspace = true
+typed-builder.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
