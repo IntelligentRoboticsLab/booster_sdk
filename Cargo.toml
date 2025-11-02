@@ -1,5 +1,6 @@
 [package]
 name = "booster_sdk"
+description = "An SDK for controlling Booster robots"
 version = "0.1.0-alpha.1"
 edition = "2024"
 authors = ["Team whIRLwind"]
