@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Team whIRLwind"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/IntelligentRobotics/booster-sdk"
+repository = "https://github.com/IntelligentRobotics/booster_sdk"
 
 [workspace.lints.rust]
 # TODO: re-enable this once we have docs for everything
