@@ -15,9 +15,6 @@ py-build = "pixi run -e py py-build-common"
 py-build-common = "PIP_REQUIRE_VIRTUALENV=0 maturin develop --manifest-path booster_sdk_py/Cargo.toml"
 py-build-wheel = "maturin build --release --manifest-path booster_sdk_py/Cargo.toml --out booster_sdk_py/dist/"
 
-[dependencies]
-maturin = ">=1.9.6,<2"
-
 [feature.wheel-build.dependencies]
 python = "==3.10"
 pip = ">=23"
