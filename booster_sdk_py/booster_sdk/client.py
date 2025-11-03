@@ -37,20 +37,20 @@ class B1LocoClient:
         >>> client.move_hand_transform(Hand.RIGHT, ([0.5, 0.5, 0.5], [0, 0, 0, 1]))
     """
 
-    def __init__(self, timeout_seconds: Optional[float] = None):
+    def __init__(self, timeout_secs: Optional[float] = None):
         """Create a new B1LocoClient
 
         Args:
-            timeout_seconds: Optional connection timeout in seconds. If None, uses default timeout.
+            timeout_secs: Optional connection timeout in seconds. If None, uses default timeout.
 
         Raises:
             ValueError: If timeout is not positive
             BoosterSdkError: If connection fails
         """
-        if timeout_seconds is None:
+        if timeout_secs is None:
             self._inner = bindings.B1LocoClient()
         else:
-            self._inner = bindings.B1LocoClient.with_timeout(timeout_seconds)
+            self._inner = bindings.B1LocoClient.with_timeout(timeout_secs)
 
     def change_mode(self, mode: RobotMode) -> None:
         """Change the robot's operating mode

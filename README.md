@@ -67,7 +67,7 @@ This will create a wheel file in `booster_sdk_py/dist/` that can be installed wi
 from booster_sdk import B1LocoClient, RobotMode, Hand
 
 # Initialize client with optional timeout
-client = B1LocoClient.with_timeout(5.0)
+client = B1LocoClient(timeout_secs=5.0)
 
 # Change to walking mode
 client.change_mode(RobotMode.WALKING)
