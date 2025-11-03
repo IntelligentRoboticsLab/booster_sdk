@@ -4,6 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/v/booster_sdk.svg)](https://crates.io/crates/booster_sdk)
 [![Downloads](https://img.shields.io/crates/d/booster_sdk.svg)](https://crates.io/crates/booster_sdk)
 [![Docs](https://docs.rs/booster_sdk/badge.svg)](https://docs.rs/booster_sdk/latest/booster_sdk/)
+[![PyPI](https://img.shields.io/pypi/v/booster_sdk.svg)](https://pypi.org/project/booster-sdk/)
 
 A Rust SDK for controlling Booster robots based on [Booster Robotics C++ SDK](https://github.com/BoosterRobotics/booster_robotics_sdk).
 
@@ -40,6 +41,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+## Experimental Python Bindings
+
+Python bindings for the SDK are available using [PyO3](https://github.com/PyO3/pyo3). These bindings are very experimental!
+
+### Requirements
+
+- Python 3.10 or higher
+- Rust toolchain (for building from source)
+
+### Installation
+
+The Python package can be built using pixi:
+
+```bash
+pixi run py-build-wheel
+```
+
+This will create a wheel file in `booster_sdk_py/dist/` that can be installed with `pip install booster_sdk_py/dist/*.whl`.
+
+### Python API Example
+
+```python
+from booster_sdk import B1LocoClient, RobotMode, Hand
+
+# Initialize client with optional timeout
+client = B1LocoClient.with_timeout(5.0)
+
+# Change to walking mode
+client.change_mode(RobotMode.WALKING)
+
+# Move forward
+client.move_robot(0.5, 0.0, 0.0)
+
+# Wave hand
+client.wave_hand(Hand.RIGHT)
+
+# Lie down when done
+client.lie_down()
+```
+
+The Python bindings expose the same high-level API as the Rust SDK, including robot mode control, locomotion, hand/gripper control, and coordinate frame transformations.
 
 # DDS Setup
 

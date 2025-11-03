@@ -1,0 +1,22 @@
+[package]
+name = "booster_sdk"
+description = "An SDK for controlling Booster robots"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+zenoh = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+typed-builder = { workspace = true }
+glam = { workspace = true }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }

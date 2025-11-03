@@ -1,0 +1,18 @@
+[package]
+name = "booster_sdk_py"
+description = "Python bindings for the Booster SDK"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "booster_sdk_bindings"
+crate-type = ["cdylib"]
+
+[dependencies]
+booster_sdk = { workspace = true }
+pyo3 = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
