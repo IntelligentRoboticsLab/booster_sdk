@@ -3,8 +3,8 @@ requires = ["maturin>=1.9,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "booster_sdk"
-requires-python = ">=3.10"
+name = "booster-sdk"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
@@ -13,4 +13,10 @@ classifiers = [
 dynamic = ["version"]
 
 [tool.maturin]
+# The booster_sdk.pth adds this to the pythonpath
+# which then allows `import booster_sdk` to work as expected.
+# Files missing from this list is not a packaging failure.
+include = ["booster_sdk.pth"]
+name = "booster_sdk_bindings"
+python-packages = ["booster_sdk"]
 features = ["pyo3/extension-module"]

@@ -4,7 +4,7 @@
 //!
 //! Run with: cargo run --example `look_around`
 
-use booster_sdk::client::B1LocoClient;
+use booster_sdk::{client::B1LocoClient, types::RobotMode};
 use tokio::time::Duration;
 
 #[tokio::main]
@@ -25,6 +25,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Rotate head
     tracing::info!("Looking around");
+
+    client.change_mode(RobotMode::Damping).await?;
 
     // scan from left to right with a sine wave
     let steps = 4000;

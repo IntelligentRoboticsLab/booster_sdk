@@ -33,9 +33,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Move forward
-    tracing::info!("Moving forward at 0.3 m/s for 3 seconds");
-    client.move_robot(0.3, 0.0, 0.0).await?;
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    let vx = 0.9;
+    tracing::info!("Moving forward at {vx} m/s for 3 seconds");
+    client.move_robot(vx, 0.0, 0.0).await?;
+    tokio::time::sleep(Duration::from_secs(8)).await;
+
+    let vx = 1.4;
+    tracing::info!("Moving forward at {vx} m/s for 3 seconds");
+    client.move_robot(vx, 0.0, 0.0).await?;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Stop
     tracing::info!("Stopping");
