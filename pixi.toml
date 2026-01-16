@@ -3,7 +3,7 @@ authors = ["Team whIRLwind"]
 channels = ["conda-forge"]
 name = "booster-sdk"
 platforms = ["osx-arm64", "linux-64"]
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 
 [environments]
 py = ["wheel-build", "python-dev", "python-tasks"]

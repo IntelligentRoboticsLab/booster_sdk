@@ -156,7 +156,7 @@ dependencies = [
 
 [[package]]
 name = "booster_sdk"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "glam",
  "serde",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "booster_sdk_py"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "booster_sdk",
  "pyo3",
