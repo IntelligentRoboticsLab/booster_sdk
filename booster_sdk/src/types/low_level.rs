@@ -5,6 +5,7 @@
 
 use super::motor::{MotorCommand, MotorState};
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// IMU (Inertial Measurement Unit) state.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -42,9 +43,17 @@ pub struct LowState {
     pub motor_state_serial: Vec<MotorState>,
 }
 
+impl LowState {
+    /// Deserialize a little-endian CDR payload (as sent by FastDDS) into a [`LowState`].
+    #[must_use]
+    pub fn from_cdr_le(bytes: &[u8]) -> Result<Self, cdr_encoding::Error> {
+        cdr_encoding::from_bytes::<Self, byteorder::LittleEndian>(bytes).map(|(msg, _)| msg)
+    }
+}
+
 /// Command type for low-level motor control.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[repr(u32)]
 pub enum CommandType {
     /// Control parallel motors.
     Parallel = 0,
@@ -53,9 +62,21 @@ pub enum CommandType {
     Serial = 1,
 }
 
-impl From<CommandType> for u8 {
+impl From<CommandType> for u32 {
     fn from(cmd_type: CommandType) -> Self {
-        cmd_type as u8
+        cmd_type as u32
+    }
+}
+
+impl TryFrom<u32> for CommandType {
+    type Error = ();
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(CommandType::Parallel),
+            1 => Ok(CommandType::Serial),
+            _ => Err(()),
+        }
     }
 }
 
@@ -63,11 +84,7 @@ impl TryFrom<u8> for CommandType {
     type Error = ();
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(CommandType::Parallel),
-            1 => Ok(CommandType::Serial),
-            _ => Err(()),
-        }
+        CommandType::try_from(u32::from(value))
     }
 }
 
@@ -146,11 +163,12 @@ mod tests {
 
     #[test]
     fn command_type_roundtrip() {
-        assert_eq!(CommandType::try_from(0u8), Ok(CommandType::Parallel));
-        assert_eq!(CommandType::try_from(1u8), Ok(CommandType::Serial));
-        assert!(CommandType::try_from(2u8).is_err());
+        assert_eq!(CommandType::try_from(0u32), Ok(CommandType::Parallel));
+        assert_eq!(CommandType::try_from(1u32), Ok(CommandType::Serial));
+        assert!(CommandType::try_from(2u32).is_err());
 
-        assert_eq!(u8::from(CommandType::Parallel), 0);
+        assert_eq!(CommandType::try_from(0u8), Ok(CommandType::Parallel));
+        assert_eq!(u32::from(CommandType::Parallel), 0);
     }
 
     #[test]
@@ -172,5 +190,36 @@ mod tests {
                 .iter()
                 .all(|value| value.abs() < f32::EPSILON)
         );
+    }
+
+    #[test]
+    fn low_state_cdr_roundtrip() {
+        use byteorder::LittleEndian;
+        use cdr_encoding::to_vec;
+
+        let mut state = LowState::default();
+        state.imu_state.rpy = [1.0, 2.0, 3.0];
+        state.motor_state_serial.push(MotorState {
+            mode: MotorMode::Servo,
+            q: 0.1,
+            dq: 0.2,
+            ddq: 0.3,
+            tau_est: 0.4,
+            temperature: 42,
+            lost: 7,
+            reserve: [9, 10],
+        });
+
+        let bytes = to_vec::<_, LittleEndian>(&state).expect("serialize");
+        let decoded = LowState::from_cdr_le(&bytes).expect("deserialize");
+
+        assert_eq!(decoded.imu_state.rpy, state.imu_state.rpy);
+        assert_eq!(decoded.motor_state_serial.len(), 1);
+        let motor = decoded.motor_state_serial[0];
+        assert_eq!(motor.mode, MotorMode::Servo);
+        assert!((motor.tau_est - 0.4).abs() < f32::EPSILON);
+        assert_eq!(motor.temperature, 42);
+        assert_eq!(motor.lost, 7);
+        assert_eq!(motor.reserve, [9, 10]);
     }
 }

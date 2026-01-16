@@ -1,9 +1,10 @@
 //! Motor command and state data structures.
 
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// Motor control mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum MotorMode {
     /// Servo mode (position/velocity control)
@@ -123,11 +124,11 @@ pub struct MotorState {
     /// Estimated torque (N·m)
     pub tau_est: f32,
     /// Motor temperature (°C)
-    pub temperature: f32,
-    /// Packet loss indicator
-    pub lost: u8,
-    /// Reserved field
-    pub reserve: u32,
+    pub temperature: u8,
+    /// Packet loss counter from firmware
+    pub lost: u32,
+    /// Reserved field for future diagnostics
+    pub reserve: [u32; 2],
 }
 
 impl Default for MotorState {
@@ -138,9 +139,9 @@ impl Default for MotorState {
             dq: 0.0,
             ddq: 0.0,
             tau_est: 0.0,
-            temperature: 0.0,
+            temperature: 0,
             lost: 0,
-            reserve: 0,
+            reserve: [0; 2],
         }
     }
 }

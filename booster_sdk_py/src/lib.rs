@@ -9,15 +9,15 @@ use ::booster_sdk::{
         HandPoseWithAuxCommand, HandTransformCommand, MoveCommand,
     },
     types::{
-        BoosterError, DanceId, Direction, Frame, GripperMode, Hand, Position, Posture, Quaternion,
-        RobotMode, Transform,
+        BoosterError, DanceId, Direction, Frame, GripperMode, Hand, ImuState, LowState, MotorMode,
+        MotorState, Position, Posture, Quaternion, RobotMode, Transform,
     },
 };
 use pyo3::{
     Bound,
     exceptions::{PyException, PyValueError},
     prelude::*,
-    types::{PyAny, PyModule, PyType},
+    types::{PyAny, PyBytes, PyModule, PyType},
 };
 
 pyo3::create_exception!(booster_sdk_bindings, BoosterSdkError, PyException);
@@ -26,6 +26,26 @@ type Any<'py> = Bound<'py, PyAny>;
 
 fn to_py_err(err: BoosterError) -> PyErr {
     BoosterSdkError::new_err(err.to_string())
+}
+
+fn expect_len3(field: &str, values: Vec<f32>) -> PyResult<[f32; 3]> {
+    if values.len() == 3 {
+        Ok([values[0], values[1], values[2]])
+    } else {
+        Err(PyValueError::new_err(format!(
+            "{field} must contain exactly 3 values"
+        )))
+    }
+}
+
+fn expect_len2_u32(field: &str, values: Vec<u32>) -> PyResult<[u32; 2]> {
+    if values.len() == 2 {
+        Ok([values[0], values[1]])
+    } else {
+        Err(PyValueError::new_err(format!(
+            "{field} must contain exactly 2 values"
+        )))
+    }
 }
 
 // Python wrapper types for enums
@@ -223,6 +243,41 @@ impl From<PyDanceId> for DanceId {
     }
 }
 
+#[pyclass(module = "booster_sdk_bindings", name = "MotorMode", eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PyMotorMode(MotorMode);
+
+#[pymethods]
+impl PyMotorMode {
+    #[classattr]
+    const SERVO: Self = Self(MotorMode::Servo);
+    #[classattr]
+    const DAMPING: Self = Self(MotorMode::Damping);
+
+    fn __repr__(&self) -> String {
+        match self.0 {
+            MotorMode::Servo => "MotorMode.SERVO".to_string(),
+            MotorMode::Damping => "MotorMode.DAMPING".to_string(),
+        }
+    }
+
+    fn __int__(&self) -> u8 {
+        u8::from(self.0)
+    }
+}
+
+impl From<PyMotorMode> for MotorMode {
+    fn from(mode: PyMotorMode) -> Self {
+        mode.0
+    }
+}
+
+impl From<MotorMode> for PyMotorMode {
+    fn from(mode: MotorMode) -> Self {
+        Self(mode)
+    }
+}
+
 // Python wrapper types for data structures
 
 #[pyclass(module = "booster_sdk_bindings", name = "Position")]
@@ -345,6 +400,332 @@ impl From<PyQuaternion> for Quaternion {
 impl From<Quaternion> for PyQuaternion {
     fn from(quat: Quaternion) -> Self {
         Self(quat)
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "ImuState")]
+#[derive(Clone)]
+pub struct PyImuState(ImuState);
+
+#[pymethods]
+impl PyImuState {
+    #[new]
+    #[pyo3(signature = (rpy=None, gyro=None, acc=None))]
+    fn new(rpy: Option<Vec<f32>>, gyro: Option<Vec<f32>>, acc: Option<Vec<f32>>) -> PyResult<Self> {
+        Ok(Self(ImuState {
+            rpy: match rpy {
+                Some(values) => expect_len3("rpy", values)?,
+                None => [0.0; 3],
+            },
+            gyro: match gyro {
+                Some(values) => expect_len3("gyro", values)?,
+                None => [0.0; 3],
+            },
+            acc: match acc {
+                Some(values) => expect_len3("acc", values)?,
+                None => [0.0; 3],
+            },
+        }))
+    }
+
+    #[getter]
+    fn rpy(&self) -> [f32; 3] {
+        self.0.rpy
+    }
+
+    #[setter]
+    fn set_rpy(&mut self, values: Vec<f32>) -> PyResult<()> {
+        self.0.rpy = expect_len3("rpy", values)?;
+        Ok(())
+    }
+
+    #[getter]
+    fn gyro(&self) -> [f32; 3] {
+        self.0.gyro
+    }
+
+    #[setter]
+    fn set_gyro(&mut self, values: Vec<f32>) -> PyResult<()> {
+        self.0.gyro = expect_len3("gyro", values)?;
+        Ok(())
+    }
+
+    #[getter]
+    fn acc(&self) -> [f32; 3] {
+        self.0.acc
+    }
+
+    #[setter]
+    fn set_acc(&mut self, values: Vec<f32>) -> PyResult<()> {
+        self.0.acc = expect_len3("acc", values)?;
+        Ok(())
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ImuState(rpy={:?}, gyro={:?}, acc={:?})",
+            self.0.rpy, self.0.gyro, self.0.acc
+        )
+    }
+}
+
+impl From<PyImuState> for ImuState {
+    fn from(py_imu: PyImuState) -> Self {
+        py_imu.0
+    }
+}
+
+impl From<ImuState> for PyImuState {
+    fn from(imu: ImuState) -> Self {
+        Self(imu)
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "MotorState")]
+#[derive(Clone)]
+pub struct PyMotorState(MotorState);
+
+#[pymethods]
+impl PyMotorState {
+    #[new]
+    #[pyo3(
+        signature = (mode=PyMotorMode::DAMPING, q=0.0, dq=0.0, ddq=0.0, tau_est=0.0, temperature=0, lost=0, reserve=None)
+    )]
+    fn new(
+        mode: PyMotorMode,
+        q: f32,
+        dq: f32,
+        ddq: f32,
+        tau_est: f32,
+        temperature: u8,
+        lost: u32,
+        reserve: Option<Vec<u32>>,
+    ) -> PyResult<Self> {
+        let reserve = match reserve {
+            Some(values) => expect_len2_u32("reserve", values)?,
+            None => [0; 2],
+        };
+
+        Ok(Self(MotorState {
+            mode: mode.into(),
+            q,
+            dq,
+            ddq,
+            tau_est,
+            temperature,
+            lost,
+            reserve,
+        }))
+    }
+
+    #[getter]
+    fn mode(&self) -> PyMotorMode {
+        PyMotorMode(self.0.mode)
+    }
+
+    #[setter]
+    fn set_mode(&mut self, mode: PyMotorMode) {
+        self.0.mode = mode.into();
+    }
+
+    #[getter]
+    fn q(&self) -> f32 {
+        self.0.q
+    }
+
+    #[setter]
+    fn set_q(&mut self, value: f32) {
+        self.0.q = value;
+    }
+
+    #[getter]
+    fn dq(&self) -> f32 {
+        self.0.dq
+    }
+
+    #[setter]
+    fn set_dq(&mut self, value: f32) {
+        self.0.dq = value;
+    }
+
+    #[getter]
+    fn ddq(&self) -> f32 {
+        self.0.ddq
+    }
+
+    #[setter]
+    fn set_ddq(&mut self, value: f32) {
+        self.0.ddq = value;
+    }
+
+    #[getter]
+    fn tau_est(&self) -> f32 {
+        self.0.tau_est
+    }
+
+    #[setter]
+    fn set_tau_est(&mut self, value: f32) {
+        self.0.tau_est = value;
+    }
+
+    #[getter]
+    fn temperature(&self) -> u8 {
+        self.0.temperature
+    }
+
+    #[setter]
+    fn set_temperature(&mut self, value: u8) {
+        self.0.temperature = value;
+    }
+
+    #[getter]
+    fn lost(&self) -> u32 {
+        self.0.lost
+    }
+
+    #[setter]
+    fn set_lost(&mut self, value: u32) {
+        self.0.lost = value;
+    }
+
+    #[getter]
+    fn reserve(&self) -> [u32; 2] {
+        self.0.reserve
+    }
+
+    #[setter]
+    fn set_reserve(&mut self, values: Vec<u32>) -> PyResult<()> {
+        self.0.reserve = expect_len2_u32("reserve", values)?;
+        Ok(())
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "MotorState(mode={:?}, q={:.3}, dq={:.3}, ddq={:.3}, tau_est={:.3}, temperature={}, lost={}, reserve={:?})",
+            self.0.mode,
+            self.0.q,
+            self.0.dq,
+            self.0.ddq,
+            self.0.tau_est,
+            self.0.temperature,
+            self.0.lost,
+            self.0.reserve
+        )
+    }
+}
+
+impl From<PyMotorState> for MotorState {
+    fn from(py_state: PyMotorState) -> Self {
+        py_state.0
+    }
+}
+
+impl From<MotorState> for PyMotorState {
+    fn from(state: MotorState) -> Self {
+        Self(state)
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "LowState")]
+#[derive(Clone)]
+pub struct PyLowState(LowState);
+
+#[pymethods]
+impl PyLowState {
+    #[new]
+    #[pyo3(signature = (imu_state=None, motor_state_parallel=None, motor_state_serial=None))]
+    fn new(
+        imu_state: Option<PyImuState>,
+        motor_state_parallel: Option<Vec<PyMotorState>>,
+        motor_state_serial: Option<Vec<PyMotorState>>,
+    ) -> Self {
+        Self(LowState {
+            imu_state: imu_state.map_or_else(ImuState::default, Into::into),
+            motor_state_parallel: motor_state_parallel
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            motor_state_serial: motor_state_serial
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        })
+    }
+
+    #[classmethod]
+    fn from_cdr(_cls: &Bound<'_, PyType>, data: &[u8]) -> PyResult<Self> {
+        LowState::from_cdr_le(data)
+            .map(Self)
+            .map_err(|err| PyValueError::new_err(format!("Failed to decode CDR: {err}")))
+    }
+
+    fn to_cdr(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
+        let bytes = cdr_encoding::to_vec::<_, byteorder::LittleEndian>(&self.0)
+            .map_err(|err| PyValueError::new_err(format!("Failed to encode CDR: {err}")))?;
+        Ok(PyBytes::new(py, &bytes).into())
+    }
+
+    #[getter]
+    fn imu_state(&self) -> PyImuState {
+        PyImuState(self.0.imu_state)
+    }
+
+    #[setter]
+    fn set_imu_state(&mut self, imu: PyImuState) {
+        self.0.imu_state = imu.into();
+    }
+
+    #[getter]
+    fn motor_state_parallel(&self) -> Vec<PyMotorState> {
+        self.0
+            .motor_state_parallel
+            .iter()
+            .cloned()
+            .map(PyMotorState::from)
+            .collect()
+    }
+
+    #[setter]
+    fn set_motor_state_parallel(&mut self, motors: Vec<PyMotorState>) {
+        self.0.motor_state_parallel = motors.into_iter().map(Into::into).collect();
+    }
+
+    #[getter]
+    fn motor_state_serial(&self) -> Vec<PyMotorState> {
+        self.0
+            .motor_state_serial
+            .iter()
+            .cloned()
+            .map(PyMotorState::from)
+            .collect()
+    }
+
+    #[setter]
+    fn set_motor_state_serial(&mut self, motors: Vec<PyMotorState>) {
+        self.0.motor_state_serial = motors.into_iter().map(Into::into).collect();
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "LowState(imu_state={:?}, motor_state_parallel={} motors, motor_state_serial={} motors)",
+            self.0.imu_state,
+            self.0.motor_state_parallel.len(),
+            self.0.motor_state_serial.len()
+        )
+    }
+}
+
+impl From<PyLowState> for LowState {
+    fn from(state: PyLowState) -> Self {
+        state.0
+    }
+}
+
+impl From<LowState> for PyLowState {
+    fn from(state: LowState) -> Self {
+        Self(state)
     }
 }
 
@@ -823,6 +1204,10 @@ fn booster_sdk_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTransform>()?;
     m.add_class::<PyPosture>()?;
     m.add_class::<PyFingerControl>()?;
+    m.add_class::<PyMotorMode>()?;
+    m.add_class::<PyImuState>()?;
+    m.add_class::<PyMotorState>()?;
+    m.add_class::<PyLowState>()?;
     m.add("BoosterSdkError", m.py().get_type::<BoosterSdkError>())?;
     Ok(())
 }
