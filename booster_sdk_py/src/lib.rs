@@ -39,6 +39,7 @@ impl PyRobotMode {
             RobotMode::Walking => "RobotMode.WALKING".to_string(),
             RobotMode::Custom => "RobotMode.CUSTOM".to_string(),
             RobotMode::Soccer => "RobotMode.SOCCER".to_string(),
+            _ => format!("RobotMode({})", i32::from(self.0)),
         }
     }
 
@@ -168,11 +169,13 @@ impl PyBoosterClient {
     }
 
     fn change_mode(&self, py: Python<'_>, mode: PyRobotMode) -> PyResult<()> {
-        wait_for_future(py, self.client.change_mode(mode.into())).map_err(to_py_err)
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.change_mode(mode.into()).await }).map_err(to_py_err)
     }
 
     fn move_robot(&self, py: Python<'_>, vx: f32, vy: f32, vyaw: f32) -> PyResult<()> {
-        wait_for_future(py, self.client.move_robot(vx, vy, vyaw)).map_err(to_py_err)
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.move_robot(vx, vy, vyaw).await }).map_err(to_py_err)
     }
 
     fn publish_gripper_command(&self, command: PyGripperCommand) -> PyResult<()> {
