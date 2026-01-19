@@ -64,13 +64,12 @@ This will create a wheel file in `booster_sdk_py/dist/` that can be installed wi
 
 ### Python API Example
 
-Note: Python bindings track the legacy API and are not yet updated to the new DDS-first Rust API.
+Note: Python bindings are intentionally minimal and expose a subset of the Rust API.
 
 ```python
-from booster_sdk import B1LocoClient, RobotMode, Hand
+from booster_sdk import BoosterClient, GripperCommand, Hand, RobotMode
 
-# Initialize client with optional timeout
-client = B1LocoClient(timeout_secs=5.0)
+client = BoosterClient()
 
 # Change to walking mode
 client.change_mode(RobotMode.WALKING)
@@ -78,14 +77,11 @@ client.change_mode(RobotMode.WALKING)
 # Move forward
 client.move_robot(0.5, 0.0, 0.0)
 
-# Wave hand
-client.wave_hand(Hand.RIGHT)
-
-# Lie down when done
-client.lie_down()
+# Open right gripper
+client.publish_gripper_command(GripperCommand.open(Hand.RIGHT))
 ```
 
-The Python bindings expose the same high-level API as the Rust SDK, including robot mode control, locomotion, hand/gripper control, and coordinate frame transformations.
+The Python bindings currently cover basic mode changes, locomotion, and gripper control.
 
 # DDS Setup
 

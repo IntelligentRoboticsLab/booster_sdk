@@ -10,15 +10,11 @@ repository.workspace = true
 [dependencies]
 tokio = { workspace = true }
 serde = { workspace = true }
-serde_repr = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 typed-builder = { workspace = true }
-glam = { workspace = true }
-cdr-encoding = { workspace = true }
-byteorder = { workspace = true }
 rustdds = { workspace = true }
 
 [dev-dependencies]

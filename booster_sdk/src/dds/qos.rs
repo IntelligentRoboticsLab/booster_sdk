@@ -1,4 +1,4 @@
-//! QoS helpers aligned with the Booster DDS reference.
+//! QoS helpers aligned with the Booster DDS config.
 
 use rustdds::{
     Duration, QosPolicies, QosPolicyBuilder,
