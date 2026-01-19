@@ -9,15 +9,9 @@ use crate::types::{DdsError, Result};
 
 use super::topics::TopicSpec;
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct DdsConfig {
     pub domain_id: u16,
-}
-
-impl Default for DdsConfig {
-    fn default() -> Self {
-        Self { domain_id: 0 }
-    }
 }
 
 #[derive(Clone)]
