@@ -64,8 +64,6 @@ name = "booster_sdk_py"
 version = "0.1.0-alpha.4"
 dependencies = [
  "booster_sdk",
- "byteorder",
- "cdr-encoding",
  "pyo3",
  "tokio",
  "tracing",
