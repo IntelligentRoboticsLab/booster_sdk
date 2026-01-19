@@ -159,6 +159,8 @@ pub struct FallEvent {
 
 #[cfg(test)]
 mod tests {
+    use crate::types::MotorMode;
+
     use super::*;
 
     #[test]
