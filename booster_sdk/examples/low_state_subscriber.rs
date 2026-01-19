@@ -1,25 +1,23 @@
-//! Subscribe to low-level state feedback over Zenoh.
+//! Subscribe to low-level state feedback over DDS.
 //!
-//! This mirrors the C++ `low_level_subscriber.cpp` example and expects the
-//! `zenoh-bridge-dds` process to bridge FastDDS topics into Zenoh. By default it
+//! This mirrors the C++ `low_level_subscriber.cpp` example. By default it
 //! listens on domain `0`; override with the `BOOSTER_DOMAIN_ID` environment
 //! variable.
 
 use booster_sdk::types::LowState;
-use zenoh::handlers::FifoChannel;
+use rustdds::{
+    DomainParticipant, QosPolicyBuilder, TopicKind, policy::History, policy::Reliability,
+};
 
 const DOMAIN_ENV: &str = "BOOSTER_DOMAIN_ID";
-const TOPIC_SUFFIX: &str = "rt/low_state";
+const TOPIC_NAME: &str = "rt/low_state";
+const TYPE_NAME: &str = "booster::msg::LowState";
 
 fn resolve_domain_id() -> u16 {
     std::env::var(DOMAIN_ENV)
         .ok()
         .and_then(|value| value.parse::<u16>().ok())
         .unwrap_or(0)
-}
-
-fn format_key_expr(domain_id: u16) -> String {
-    format!("domain{domain_id}/{TOPIC_SUFFIX}")
 }
 
 fn log_low_state(state: &LowState) {
@@ -59,30 +57,33 @@ fn log_low_state(state: &LowState) {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing_subscriber::fmt().with_env_filter("info").init();
 
     let domain_id = resolve_domain_id();
-    let key_expr = format_key_expr(domain_id);
-    tracing::info!("Subscribing to '{key_expr}' (domain: {domain_id})");
-    tracing::info!("Make sure zenoh-bridge-dds is running to bridge DDS topics");
+    tracing::info!("Subscribing to '{TOPIC_NAME}' (domain: {domain_id})");
 
-    let session = zenoh::open(zenoh::Config::default()).await?;
-    let subscriber = session
-        .declare_subscriber(&key_expr)
-        .with(FifoChannel::default())
-        .await?;
+    let participant = DomainParticipant::new(domain_id)?;
+    let qos = QosPolicyBuilder::new()
+        .reliability(Reliability::BestEffort)
+        .history(History::KeepLast { depth: 1 })
+        .build();
+    let subscriber = participant.create_subscriber(&qos)?;
+    let topic = participant.create_topic(
+        TOPIC_NAME.to_string(),
+        TYPE_NAME.to_string(),
+        &qos,
+        TopicKind::NoKey,
+    )?;
+    let mut reader = subscriber.create_datareader_no_key_cdr::<LowState>(&topic, Some(qos))?;
 
     tracing::info!("Waiting for LowState samples...");
 
     loop {
-        let sample = subscriber.recv_async().await?;
-        let payload = sample.payload().to_bytes();
-
-        match LowState::from_cdr_le(payload.as_ref()) {
-            Ok(state) => log_low_state(&state),
-            Err(err) => tracing::warn!("Failed to decode LowState sample: {err}"),
+        match reader.take_next_sample() {
+            Ok(Some(sample)) => log_low_state(sample.value()),
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(5)),
+            Err(err) => tracing::warn!("Failed to read LowState sample: {err}"),
         }
     }
 }

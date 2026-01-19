@@ -9,7 +9,6 @@ repository.workspace = true
 
 [dependencies]
 tokio = { workspace = true }
-zenoh = { workspace = true }
 serde = { workspace = true }
 serde_repr = { workspace = true }
 serde_json = { workspace = true }
@@ -20,6 +19,7 @@ typed-builder = { workspace = true }
 glam = { workspace = true }
 cdr-encoding = { workspace = true }
 byteorder = { workspace = true }
+rustdds = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }

@@ -18,6 +18,9 @@ pub enum RobotMode {
 
     /// Custom mode, user-defined behavior
     Custom = 3,
+
+    /// Soccer mode
+    Soccer = 4,
 }
 
 impl TryFrom<i32> for RobotMode {
@@ -29,6 +32,7 @@ impl TryFrom<i32> for RobotMode {
             1 => Ok(RobotMode::Prepare),
             2 => Ok(RobotMode::Walking),
             3 => Ok(RobotMode::Custom),
+            4 => Ok(RobotMode::Soccer),
             _ => Err(()),
         }
     }
@@ -94,6 +98,15 @@ impl From<Hand> for usize {
 }
 
 impl From<Hand> for i32 {
+    fn from(hand: Hand) -> Self {
+        match hand {
+            Hand::Left => 0,
+            Hand::Right => 1,
+        }
+    }
+}
+
+impl From<Hand> for u8 {
     fn from(hand: Hand) -> Self {
         match hand {
             Hand::Left => 0,

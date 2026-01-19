@@ -11,20 +11,20 @@ A Rust SDK for controlling Booster robots based on [Booster Robotics C++ SDK](ht
 ## 🚧 Project Status
 
 This library is currently in early development. The core architecture and types are defined, but none of it has been tested on
-an actual robot yet. Specifically, the `dds` module's Zenoh communication layer is untested.
+an actual robot yet. The DDS transport layer is implemented using RustDDS.
 
 ## API Examples
 
 ### High-Level Locomotion Control
 
 ```rust
-use booster_sdk::client::B1LocoClient;
+use booster_sdk::client::BoosterClient;
 use booster_sdk::types::{RobotMode, Hand};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize and create client
-    let client = B1LocoClient::new().await?;
+    let client = BoosterClient::new()?;
 
     // Change to walking mode
     client.change_mode(RobotMode::Walking).await?;
@@ -33,7 +33,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     client.move_robot(0.5, 0.0, 0.0).await?;
 
     // Wave hand
-    client.wave_hand(Hand::Right).await?;
+    // Publish gripper commands if needed (DDS topic-based control)
+    client.publish_gripper_command(&booster_sdk::client::GripperCommand::open(Hand::Right))?;
 
     // Lie down when done
     client.lie_down().await?;
@@ -63,6 +64,8 @@ This will create a wheel file in `booster_sdk_py/dist/` that can be installed wi
 
 ### Python API Example
 
+Note: Python bindings track the legacy API and are not yet updated to the new DDS-first Rust API.
+
 ```python
 from booster_sdk import B1LocoClient, RobotMode, Hand
 
@@ -86,7 +89,7 @@ The Python bindings expose the same high-level API as the Rust SDK, including ro
 
 # DDS Setup
 
-Setting up the DDS communication layer to work with Booster robots involves configuring Zenoh. Please refer to the [DDS Setup Guide](docs/dds_setup.md) for detailed instructions.
+The Rust SDK communicates directly over DDS (RustDDS). Please refer to the [DDS Setup Guide](docs/dds_setup.md) for detailed instructions.
 
 ## Contributing
 

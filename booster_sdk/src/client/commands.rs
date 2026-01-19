@@ -185,6 +185,22 @@ impl GripperCommand {
             speed: 500,
         }
     }
+
+    /// Convert to DDS gripper control message.
+    #[must_use]
+    pub fn to_dds_control(&self) -> crate::dds::GripperControl {
+        let (position, force) = match self.mode {
+            GripperMode::Position => (self.motion_param as i32, 0),
+            GripperMode::Force => (0, self.motion_param as i32),
+        };
+
+        crate::dds::GripperControl {
+            hand_index: u8::from(self.hand),
+            position,
+            force,
+            speed: self.speed as i32,
+        }
+    }
 }
 
 /// Per-finger control parameters for dexterous hand

@@ -5,10 +5,9 @@
 //! those APIs.
 //!
 //! ## Modules
-//! - [`client`]: robot control interfaces such as [`client::B1LocoClient`]
+//! - [`client`]: robot control interfaces such as [`client::BoosterClient`]
 //!   for locomotion, manipulation, and gesture commands.
-//! - [`dds`]: Zenoh-based RPC transport primitives for communicating with Booster
-//!   services.
+//! - [`dds`]: DDS transport primitives for communicating with Booster services.
 //! - [`types`]: core data structures, error types, and helper utilities shared across
 //!   the SDK.
 //!
@@ -17,11 +16,11 @@
 //! Most applications will interact with the [`client`] module:
 //!
 //! ```no_run
-//! use booster_sdk::client::B1LocoClient;
+//! use booster_sdk::client::BoosterClient;
 //! use booster_sdk::types::RobotMode;
 //!
 //! # async fn demo() -> booster_sdk::types::Result<()> {
-//! let client = B1LocoClient::new().await?;
+//! let client = BoosterClient::new()?;
 //! client.change_mode(RobotMode::Walking).await?;
 //! client.move_robot(0.5, 0.0, 0.0).await?;
 //! # Ok(())

@@ -1,11 +1,11 @@
 //! High-level locomotion control example
 //!
-//! This example demonstrates basic locomotion control using the `B1LocoClient`.
+//! This example demonstrates basic locomotion control using the `BoosterClient`.
 //!
 //! Run with: cargo run --example `locomotion_control`
 
-use booster_sdk::client::{B1LocoClient, commands::MoveCommand};
-use booster_sdk::types::{Hand, RobotMode};
+use booster_sdk::client::BoosterClient;
+use booster_sdk::types::RobotMode;
 use tokio::time::Duration;
 
 #[tokio::main]
@@ -16,13 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Starting locomotion control example");
 
     // Create client with 2-second timeout
-    let client = B1LocoClient::with_timeout(Duration::from_millis(2000)).await?;
-
-    // Get current mode
-    match client.get_mode().await {
-        Ok(mode) => tracing::info!("Current mode: {:?}", mode),
-        Err(e) => tracing::error!("Failed to get mode: {}", e),
-    }
+    let client = BoosterClient::new()?;
 
     // Change to walking mode
     tracing::info!("Changing to walking mode...");
@@ -32,47 +26,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Wait a moment for mode transition
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    // Move forward
-    let vx = 0.9;
-    tracing::info!("Moving forward at {vx} m/s for 3 seconds");
-    client.move_robot(vx, 0.0, 0.0).await?;
-    tokio::time::sleep(Duration::from_secs(8)).await;
-
-    let vx = 1.4;
-    tracing::info!("Moving forward at {vx} m/s for 3 seconds");
-    client.move_robot(vx, 0.0, 0.0).await?;
-    tokio::time::sleep(Duration::from_secs(10)).await;
-
-    // Stop
-    tracing::info!("Stopping");
-    client.stop().await?;
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    // Turn in place
-    tracing::info!("Turning left for 2 seconds");
-    let turn_cmd = MoveCommand::turn(0.5);
-    client.move_with_command(&turn_cmd).await?;
-    tokio::time::sleep(Duration::from_secs(2)).await;
-
-    // Stop again
-    tracing::info!("Stopping");
-    client.stop().await?;
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    // Wave hand
-    tracing::info!("Waving right hand");
-    client.wave_hand(Hand::Right).await?;
+    tracing::info!("Moving forward at 0.5 m/s for 3 seconds");
+    client.move_robot(0.5, 0.0, 0.0).await?;
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // Rotate head
-    tracing::info!("Looking around");
-    client.rotate_head(0.2, 0.5).await?;
-    tokio::time::sleep(Duration::from_secs(2)).await;
-    client.rotate_head(0.0, 0.0).await?; // Center head
+    tracing::info!("Stopping");
+    client.move_robot(0.0, 0.0, 0.0).await?;
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
-    // Lie down
-    tracing::info!("Lying down");
-    client.lie_down().await?;
+    tracing::info!("Turning left for 2 seconds");
+    client.move_robot(0.0, 0.0, 0.6).await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    tracing::info!("Stopping");
+    client.move_robot(0.0, 0.0, 0.0).await?;
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
     tracing::info!("Example completed successfully");
 
