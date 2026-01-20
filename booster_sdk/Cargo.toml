@@ -9,14 +9,13 @@ repository.workspace = true
 
 [dependencies]
 tokio = { workspace = true }
-zenoh = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 typed-builder = { workspace = true }
-glam = { workspace = true }
+rustdds = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
