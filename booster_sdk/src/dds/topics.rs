@@ -54,7 +54,7 @@ pub fn loco_response_topic() -> TopicSpec {
     TopicSpec {
         name: "rt/LocoApiTopicResp",
         type_name: TYPE_RPC_RESP,
-        qos: qos_best_effort_keep_last(10),
+        qos: qos_reliable_keep_last(10),
         kind: TopicKind::NoKey,
     }
 }

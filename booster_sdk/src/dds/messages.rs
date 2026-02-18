@@ -14,7 +14,6 @@ pub struct RpcRespMsg {
     pub uuid: String,
     pub header: String,
     pub body: String,
-    pub status_code: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

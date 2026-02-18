@@ -14,9 +14,9 @@ use serde::{Deserialize, Serialize};
 const CHANGE_MODE_API_ID: i32 = 2000;
 const MOVE_API_ID: i32 = 2001;
 
-// The controller sends status_code=-1 (pending) immediately and only sends
-// the final 0 after the physical transition completes. Mode transitions
-// (especially PREPARE) can take 3-5 s per the DDS reference.
+// The controller may send an intermediate pending status (-1) before the
+// final success response. Mode transitions (especially PREPARE) can take
+// several seconds.
 const CHANGE_MODE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 #[derive(Deserialize)]

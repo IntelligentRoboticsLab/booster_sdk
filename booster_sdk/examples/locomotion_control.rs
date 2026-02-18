@@ -22,9 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Without this, the first request can be dropped if the locomotion
     // controller's subscriber hasn't been matched yet.
     tracing::info!("Waiting for DDS discovery...");
-    client
-        .wait_for_discovery(Duration::from_secs(2))
-        .await?;
+    client.wait_for_discovery(Duration::from_secs(2)).await?;
     tracing::info!("DDS discovery complete");
 
     // Change to walking mode

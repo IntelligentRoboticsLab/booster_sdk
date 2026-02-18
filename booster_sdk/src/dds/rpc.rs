@@ -1,6 +1,7 @@
 //! RPC client for high-level API requests over DDS.
 
 use serde::{Serialize, de::DeserializeOwned};
+use serde_json::Value;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -23,9 +24,7 @@ impl Default for RpcClientOptions {
     fn default() -> Self {
         Self {
             domain_id: 0,
-            // 5 s is a safe default for most commands. Mode changes are slow
-            // (the controller responds -1/pending immediately and only sends
-            // the final 0 after the physical transition, which can take 3-5 s)
+            // 5 s is a safe default for most commands. Mode changes are slow,
             // so change_mode passes its own longer timeout.
             default_timeout: Duration::from_secs(5),
         }
@@ -37,6 +36,32 @@ pub struct RpcClient {
     request_writer: rustdds::no_key::DataWriter<RpcReqMsg>,
     response_reader: Arc<Mutex<DataReader<RpcRespMsg>>>,
     default_timeout: Duration,
+}
+
+fn parse_status_value(value: &Value) -> Option<i32> {
+    match value {
+        Value::Number(n) => n.as_i64().and_then(|v| i32::try_from(v).ok()),
+        Value::String(s) => s.parse::<i32>().ok(),
+        _ => None,
+    }
+}
+
+fn parse_status_from_header(raw_json: &str) -> Option<i32> {
+    let value: Value = serde_json::from_str(raw_json.trim()).ok()?;
+    let object = value.as_object()?;
+    object.get("status").and_then(parse_status_value)
+}
+
+fn decode_response_body<R>(body: &str) -> std::result::Result<R, serde_json::Error>
+where
+    R: DeserializeOwned,
+{
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return serde_json::from_str("{}");
+    }
+
+    serde_json::from_str(trimmed)
 }
 
 impl RpcClient {
@@ -120,22 +145,25 @@ impl RpcClient {
                             continue;
                         }
 
-                        if response.status_code == -1 {
+                        let status_code = parse_status_from_header(&response.header).unwrap_or(0);
+
+                        if status_code == -1 {
                             continue;
                         }
 
-                        if response.status_code != 0 {
-                            return Err(RpcError::from_status_code(
-                                response.status_code,
-                                response.body,
-                            )
-                            .into());
+                        if status_code != 0 {
+                            let message = if response.body.trim().is_empty() {
+                                response.header
+                            } else {
+                                response.body
+                            };
+                            return Err(RpcError::from_status_code(status_code, message).into());
                         }
 
-                        let result: R = serde_json::from_str(&response.body).map_err(|err| {
+                        let result: R = decode_response_body(&response.body).map_err(|err| {
                             RpcError::RequestFailed {
-                                status: response.status_code,
-                                message: format!("Failed to deserialize response: {err}"),
+                                status: status_code,
+                                message: format!("Failed to deserialize response body: {err}"),
                             }
                         })?;
 
@@ -150,5 +178,44 @@ impl RpcClient {
         })
         .await
         .map_err(|err| DdsError::ReceiveFailed(err.to_string()))?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{decode_response_body, parse_status_from_header, parse_status_value};
+    use serde_json::json;
+
+    #[derive(serde::Deserialize)]
+    struct EmptyResponse {}
+
+    #[test]
+    fn parse_status_from_header_reads_status_field() {
+        assert_eq!(parse_status_from_header(r#"{"status":0}"#), Some(0));
+        assert_eq!(parse_status_from_header(r#"{"status":"-1"}"#), Some(-1));
+    }
+
+    #[test]
+    fn parse_status_value_handles_number_and_string() {
+        assert_eq!(parse_status_value(&json!(0)), Some(0));
+        assert_eq!(parse_status_value(&json!("-1")), Some(-1));
+        assert_eq!(parse_status_value(&json!("not-a-number")), None);
+    }
+
+    #[test]
+    fn parse_status_from_header_ignores_other_fields() {
+        assert_eq!(parse_status_from_header(r#"{"status_code":0}"#), None);
+        assert_eq!(parse_status_from_header(r#"{"code":0}"#), None);
+    }
+
+    #[test]
+    fn empty_body_deserializes_as_empty_object() {
+        let _: EmptyResponse = decode_response_body("").expect("empty body should parse");
+    }
+
+    #[test]
+    fn non_json_body_fails_deserialization() {
+        let parsed = decode_response_body::<EmptyResponse>("not-json");
+        assert!(parsed.is_err());
     }
 }
