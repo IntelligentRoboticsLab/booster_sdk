@@ -14,6 +14,11 @@ use serde::{Deserialize, Serialize};
 const CHANGE_MODE_API_ID: i32 = 2000;
 const MOVE_API_ID: i32 = 2001;
 
+// The controller sends status_code=-1 (pending) immediately and only sends
+// the final 0 after the physical transition completes. Mode transitions
+// (especially PREPARE) can take 3-5 s per the DDS reference.
+const CHANGE_MODE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 #[derive(Deserialize)]
 struct EmptyResponse {}
 
@@ -47,6 +52,18 @@ impl BoosterClient {
         })
     }
 
+    /// Wait until the locomotion controller's DDS endpoints are discovered.
+    ///
+    /// DDS participant discovery is asynchronous. Call this once after
+    /// construction and before the first [`change_mode`] or [`move_robot`] call
+    /// to prevent the request from being silently dropped before the remote
+    /// subscriber is found.
+    ///
+    /// A timeout of 5–10 seconds is reasonable for a local robot network.
+    pub async fn wait_for_discovery(&self, timeout: std::time::Duration) -> Result<()> {
+        self.rpc.wait_for_discovery(timeout).await
+    }
+
     pub async fn change_mode(&self, mode: RobotMode) -> Result<()> {
         #[derive(Serialize)]
         struct Params {
@@ -59,7 +76,7 @@ impl BoosterClient {
                 &Params {
                     mode: i32::from(mode),
                 },
-                None,
+                Some(CHANGE_MODE_TIMEOUT),
             )
             .await?;
 

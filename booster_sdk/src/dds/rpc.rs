@@ -23,7 +23,11 @@ impl Default for RpcClientOptions {
     fn default() -> Self {
         Self {
             domain_id: 0,
-            default_timeout: Duration::from_millis(1000),
+            // 5 s is a safe default for most commands. Mode changes are slow
+            // (the controller responds -1/pending immediately and only sends
+            // the final 0 after the physical transition, which can take 3-5 s)
+            // so change_mode passes its own longer timeout.
+            default_timeout: Duration::from_secs(5),
         }
     }
 }
@@ -56,6 +60,28 @@ impl RpcClient {
 
     pub fn node(&self) -> &DdsNode {
         &self.node
+    }
+
+    /// Wait until the locomotion controller's DDS subscriber is discovered.
+    ///
+    /// DDS participant discovery is asynchronous and can take hundreds of
+    /// milliseconds. Call this once after construction before making any RPC
+    /// calls to avoid the first request being silently dropped.
+    pub async fn wait_for_discovery(&self, timeout: Duration) -> Result<()> {
+        use std::time::Instant;
+        let deadline = Instant::now() + timeout;
+        loop {
+            if !self.request_writer.get_matched_subscriptions().is_empty() {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err(crate::types::DdsError::InitializationFailed(
+                    "Timed out waiting for DDS discovery: no matched subscriptions on LocoApiTopicReq".to_string(),
+                )
+                .into());
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
     }
 
     pub async fn call<P, R>(&self, api_id: i32, params: &P, timeout: Option<Duration>) -> Result<R>

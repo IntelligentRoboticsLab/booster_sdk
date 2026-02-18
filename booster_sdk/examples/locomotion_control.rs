@@ -15,8 +15,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Starting locomotion control example");
 
-    // Create client with 2-second timeout
+    // Create client
     let client = BoosterClient::new()?;
+
+    // Wait for DDS discovery before sending any RPC calls.
+    // Without this, the first request can be dropped if the locomotion
+    // controller's subscriber hasn't been matched yet.
+    tracing::info!("Waiting for DDS discovery...");
+    client
+        .wait_for_discovery(Duration::from_secs(10))
+        .await?;
+    tracing::info!("DDS discovery complete");
 
     // Change to walking mode
     tracing::info!("Changing to walking mode...");

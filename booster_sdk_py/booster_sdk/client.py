@@ -15,6 +15,15 @@ class BoosterClient:
     def __init__(self) -> None:
         self._inner = bindings.BoosterClient()
 
+    def wait_for_discovery(self, timeout_secs: float = 10.0) -> None:
+        """Wait until the locomotion controller's DDS endpoints are discovered.
+
+        Call this once after construction and before the first ``change_mode``
+        or ``move_robot`` call.  Without it, the first request may be silently
+        dropped because DDS discovery (SPDP) takes a few hundred milliseconds.
+        """
+        self._inner.wait_for_discovery(timeout_secs)
+
     def change_mode(self, mode: RobotMode) -> None:
         self._inner.change_mode(mode)
 
