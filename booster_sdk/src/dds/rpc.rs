@@ -62,26 +62,18 @@ impl RpcClient {
         &self.node
     }
 
-    /// Wait until the locomotion controller's DDS subscriber is discovered.
+    /// Give DDS participant discovery time to complete.
     ///
-    /// DDS participant discovery is asynchronous and can take hundreds of
-    /// milliseconds. Call this once after construction before making any RPC
-    /// calls to avoid the first request being silently dropped.
+    /// SPDP discovery is asynchronous — the first message published before
+    /// endpoints are matched is silently dropped (VOLATILE durability).
+    /// Call this once after construction and before the first RPC call.
+    ///
+    /// `rustdds` 0.11 does not implement `get_matched_subscriptions()`, so we
+    /// cannot poll for a real match. A fixed sleep is the pragmatic fallback
+    /// (the reference Python examples use the same pattern).
     pub async fn wait_for_discovery(&self, timeout: Duration) -> Result<()> {
-        use std::time::Instant;
-        let deadline = Instant::now() + timeout;
-        loop {
-            if !self.request_writer.get_matched_subscriptions().is_empty() {
-                return Ok(());
-            }
-            if Instant::now() >= deadline {
-                return Err(crate::types::DdsError::InitializationFailed(
-                    "Timed out waiting for DDS discovery: no matched subscriptions on LocoApiTopicReq".to_string(),
-                )
-                .into());
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
+        tokio::time::sleep(timeout).await;
+        Ok(())
     }
 
     pub async fn call<P, R>(&self, api_id: i32, params: &P, timeout: Option<Duration>) -> Result<R>
