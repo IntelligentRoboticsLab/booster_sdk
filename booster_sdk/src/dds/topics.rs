@@ -28,22 +28,22 @@ impl TopicSpec {
     }
 }
 
-pub const TYPE_RPC_REQ: &str = "booster::msg::RpcReqMsg";
-pub const TYPE_RPC_RESP: &str = "booster::msg::RpcRespMsg";
-pub const TYPE_ROBOT_STATUS: &str = "booster::msg::RobotStatusDdsMsg";
+pub const TYPE_RPC_REQ: &str = "booster_msgs::msg::dds_::RpcReqMsg_";
+pub const TYPE_RPC_RESP: &str = "booster_msgs::msg::dds_::RpcRespMsg_";
+pub const TYPE_ROBOT_STATUS: &str = "booster_interface::msg::dds_::RobotStatusDdsMsg_";
 pub const TYPE_MOTION_STATE: &str = "booster::msg::MotionState";
-pub const TYPE_BATTERY_STATE: &str = "booster::msg::BatteryState";
-pub const TYPE_BUTTON_EVENT: &str = "booster::msg::ButtonEventMsg";
-pub const TYPE_REMOTE_CONTROLLER: &str = "booster::msg::RemoteControllerState";
-pub const TYPE_PROCESS_STATE: &str = "booster::msg::RobotProcessStateMsg";
-pub const TYPE_BINARY_DATA: &str = "booster::msg::BinaryData";
-pub const TYPE_GRIPPER_CONTROL: &str = "booster::msg::GripperControl";
-pub const TYPE_LIGHT_CONTROL: &str = "booster::msg::LightControlMsg";
-pub const TYPE_SAFE_MODE: &str = "booster::msg::SafeMode";
+pub const TYPE_BATTERY_STATE: &str = "booster_interface::msg::dds_::BatteryState_";
+pub const TYPE_BUTTON_EVENT: &str = "booster_interface::msg::dds_::ButtonEventMsg_";
+pub const TYPE_REMOTE_CONTROLLER: &str = "booster_interface::msg::dds_::RemoteControllerState_";
+pub const TYPE_PROCESS_STATE: &str = "booster_interface::msg::dds_::RobotProcessStateMsg_";
+pub const TYPE_BINARY_DATA: &str = "booster_msgs::msg::dds_::BinaryData_";
+pub const TYPE_GRIPPER_CONTROL: &str = "booster_interface::msg::dds_::GripperControl_";
+pub const TYPE_LIGHT_CONTROL: &str = "booster_interface::msg::dds_::LightControlMsg_";
+pub const TYPE_SAFE_MODE: &str = "booster_msgs::msg::dds_::BinaryData_";
 
 pub fn loco_request_topic() -> TopicSpec {
     TopicSpec {
-        name: "LocoApiTopicReq",
+        name: "rt/LocoApiTopicReq",
         type_name: TYPE_RPC_REQ,
         qos: qos_reliable_keep_last(10),
         kind: TopicKind::NoKey,
@@ -52,9 +52,9 @@ pub fn loco_request_topic() -> TopicSpec {
 
 pub fn loco_response_topic() -> TopicSpec {
     TopicSpec {
-        name: "LocoApiTopicResp",
+        name: "rt/LocoApiTopicResp",
         type_name: TYPE_RPC_RESP,
-        qos: qos_reliable_keep_last(10),
+        qos: qos_best_effort_keep_last(10),
         kind: TopicKind::NoKey,
     }
 }
