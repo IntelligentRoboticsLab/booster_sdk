@@ -22,6 +22,9 @@ py-build-wheel = "pixi run -e py py-build-wheel-common"
 py-fmt = "ruff format --config booster_sdk_py/pyproject.toml"
 py-lint = "ruff check --config booster_sdk_py/pyproject.toml && ruff format --check --config booster_sdk_py/pyproject.toml"
 
+[feature.python-tasks.pypi-dependencies]
+ruff = ">=0.15.1,<0.16.0"
+
 [feature.wheel-build.tasks]
 py-build-common = "PIP_REQUIRE_VIRTUALENV=0 maturin develop --manifest-path booster_sdk_py/Cargo.toml"
 py-build-wheel-common = "maturin build --release --manifest-path booster_sdk_py/Cargo.toml --out booster_sdk_py/dist/"
