@@ -87,20 +87,6 @@ impl RpcClient {
         &self.node
     }
 
-    /// Give DDS participant discovery time to complete.
-    ///
-    /// SPDP discovery is asynchronous — the first message published before
-    /// endpoints are matched is silently dropped (VOLATILE durability).
-    /// Call this once after construction and before the first RPC call.
-    ///
-    /// `rustdds` 0.11 does not implement `get_matched_subscriptions()`, so we
-    /// cannot poll for a real match. A fixed sleep is the pragmatic fallback
-    /// (the reference Python examples use the same pattern).
-    pub async fn wait_for_discovery(&self, timeout: Duration) -> Result<()> {
-        tokio::time::sleep(timeout).await;
-        Ok(())
-    }
-
     pub async fn call<P, R>(&self, api_id: i32, params: &P, timeout: Option<Duration>) -> Result<R>
     where
         P: Serialize,

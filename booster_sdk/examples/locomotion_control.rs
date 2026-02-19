@@ -18,13 +18,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create client
     let client = BoosterClient::new()?;
 
-    // Wait for DDS discovery before sending any RPC calls.
-    // Without this, the first request can be dropped if the locomotion
-    // controller's subscriber hasn't been matched yet.
-    tracing::info!("Waiting for DDS discovery...");
-    client.wait_for_discovery(Duration::from_secs(2)).await?;
-    tracing::info!("DDS discovery complete");
-
     // Change to walking mode
     tracing::info!("Changing to walking mode...");
     client.change_mode(RobotMode::Walking).await?;

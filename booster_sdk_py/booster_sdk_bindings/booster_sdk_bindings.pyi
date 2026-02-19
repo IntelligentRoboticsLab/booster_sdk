@@ -48,16 +48,12 @@ class GripperCommand:
         motion_param: int,
         speed: int | None = ...,
     ) -> None: ...
-
     @staticmethod
     def open(hand: Hand) -> GripperCommand: ...
-
     @staticmethod
     def close(hand: Hand) -> GripperCommand: ...
-
     @staticmethod
     def grasp(hand: Hand, force: int) -> GripperCommand: ...
-
     def __repr__(self) -> str: ...
 
 class BoosterClient:

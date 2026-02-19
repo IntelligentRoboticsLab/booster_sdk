@@ -52,18 +52,6 @@ impl BoosterClient {
         })
     }
 
-    /// Give DDS participant discovery time to complete.
-    ///
-    /// DDS participant discovery is asynchronous. Call this once after
-    /// construction and before the first [`change_mode`] or [`move_robot`] call
-    /// to prevent the request from being silently dropped before the remote
-    /// subscriber is found.
-    ///
-    /// A duration of 1–2 seconds is typical for a local robot network.
-    pub async fn wait_for_discovery(&self, timeout: std::time::Duration) -> Result<()> {
-        self.rpc.wait_for_discovery(timeout).await
-    }
-
     pub async fn change_mode(&self, mode: RobotMode) -> Result<()> {
         #[derive(Serialize)]
         struct Params {
