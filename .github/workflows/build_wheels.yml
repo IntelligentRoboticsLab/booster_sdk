@@ -23,4 +23,9 @@ jobs:
           pixi-version: v0.63.2
           environments: "py"
       - name: Build wheels
-        run: pixi run py-build
+        run: pixi run py-build-wheel
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.platform.runner }}
+          path: booster_sdk_py/dist/

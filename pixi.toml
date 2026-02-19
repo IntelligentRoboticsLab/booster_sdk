@@ -17,10 +17,14 @@ rs-fmt = "cargo fmt --all"
 
 [feature.python-tasks.tasks]
 py-build = "pixi run -e py py-build-common"
+py-build-wheel = "pixi run -e py py-build-wheel-common"
+
+py-fmt = "ruff format --config booster_sdk_py/pyproject.toml"
+py-lint = "ruff check --config booster_sdk_py/pyproject.toml && ruff format --check --config booster_sdk_py/pyproject.toml"
 
 [feature.wheel-build.tasks]
 py-build-common = "PIP_REQUIRE_VIRTUALENV=0 maturin develop --manifest-path booster_sdk_py/Cargo.toml"
-py-build-wheel = "maturin build --release --manifest-path booster_sdk_py/Cargo.toml --out booster_sdk_py/dist/"
+py-build-wheel-common = "maturin build --release --manifest-path booster_sdk_py/Cargo.toml --out booster_sdk_py/dist/"
 
 [feature.wheel-build.dependencies]
 pip = ">=23"
