@@ -14,16 +14,13 @@ jobs:
       matrix:
         platform:
           - runner: ubuntu-22.04
-            pixi-env: py
           - runner: ubuntu-22.04-arm
-            pixi-env: py
           - runner: macos-14
-            pixi-env: py
     steps:
       - uses: actions/checkout@v4
       - uses: prefix-dev/setup-pixi@v0.9.1
         with:
           pixi-version: v0.63.2
-          environments: ${{ matrix.platform.pixi-env }}
+          environments: "py"
       - name: Build wheels
         run: pixi run py-build
