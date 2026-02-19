@@ -20,7 +20,7 @@ jobs:
                       target: x86_64-unknown-linux-gnu
                       manylinux: "2_28"
                       maturin_args: >-
-                          --release --manifest-path booster_sdk_py/pyproject.toml --out dist --compatibility pypi
+                          --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi
                           -i python3.10 -i python3.11 -i python3.12 -i python3.13
 
                     # manylinux_2_28 aarch64 (cp310-cp313)
@@ -29,7 +29,7 @@ jobs:
                       target: aarch64-unknown-linux-gnu
                       manylinux: "2_28"
                       maturin_args: >-
-                          --release --manifest-path booster_sdk_py/pyproject.toml --out dist --compatibility pypi
+                          --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi
                           -i python3.10 -i python3.11 -i python3.12 -i python3.13
 
                     # macOS arm64 (cp310)
@@ -38,7 +38,7 @@ jobs:
                       target: aarch64-apple-darwin
                       python: "3.10"
                       manylinux: ""
-                      maturin_args: --release --manifest-path booster_sdk_py/pyproject.toml --out dist --compatibility pypi -i python
+                      maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
 
                     # macOS arm64 (cp311)
                     - id: macos-arm64-cp311
@@ -46,7 +46,7 @@ jobs:
                       target: aarch64-apple-darwin
                       python: "3.11"
                       manylinux: ""
-                      maturin_args: --release --manifest-path booster_sdk_py/pyproject.toml --out dist --compatibility pypi -i python
+                      maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
 
                     # macOS arm64 (cp312)
                     - id: macos-arm64-cp312
@@ -54,7 +54,7 @@ jobs:
                       target: aarch64-apple-darwin
                       python: "3.12"
                       manylinux: ""
-                      maturin_args: --release --manifest-path booster_sdk_py/pyproject.toml --out dist --compatibility pypi -i python
+                      maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
 
                     # macOS arm64 (cp313)
                     - id: macos-arm64-cp313
@@ -62,7 +62,7 @@ jobs:
                       target: aarch64-apple-darwin
                       python: "3.13"
                       manylinux: ""
-                      maturin_args: --release --manifest-path booster_sdk_py/pyproject.toml --out dist --compatibility pypi -i python
+                      maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
 
         steps:
             - uses: actions/checkout@v4
