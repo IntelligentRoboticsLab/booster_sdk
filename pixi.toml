@@ -2,24 +2,34 @@
 authors = ["Team whIRLwind"]
 channels = ["conda-forge"]
 name = "booster-sdk"
-platforms = ["osx-arm64", "linux-64"]
+platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 version = "0.1.0-alpha.4"
 
 [environments]
-py = ["wheel-build", "python-dev", "python-tasks"]
+py = ["wheel-build", "python-tasks"]
+
+[dependencies]
+python = "==3.11"
+
+[tasks]
+rs-check = "python scripts/ci/checks_rust.py"
+rs-fmt = "cargo fmt --all"
 
 [feature.python-tasks.tasks]
 py-build = "pixi run -e py py-build-common"
+py-build-wheel = "pixi run -e py py-build-wheel-common"
+
+py-fmt = "ruff format --config booster_sdk_py/pyproject.toml"
+py-lint = "ruff check --config booster_sdk_py/pyproject.toml && ruff format --check --config booster_sdk_py/pyproject.toml"
+
+[feature.python-tasks.pypi-dependencies]
+ruff = ">=0.15.1,<0.16.0"
 
 [feature.wheel-build.tasks]
 py-build-common = "PIP_REQUIRE_VIRTUALENV=0 maturin develop --manifest-path booster_sdk_py/Cargo.toml"
-py-build-wheel = "maturin build --release --manifest-path booster_sdk_py/Cargo.toml --out booster_sdk_py/dist/"
+py-build-wheel-common = "maturin build --release --manifest-path booster_sdk_py/Cargo.toml --out booster_sdk_py/dist/"
 
 [feature.wheel-build.dependencies]
-python = "==3.11"
 pip = ">=23"
 setuptools = ">=80.0,<81.0"
 maturin = ">=1.9.6,<2"
-
-[feature.python-dev.pypi-dependencies]
-# booster_sdk = { path = "booster_sdk_py", editable = true }

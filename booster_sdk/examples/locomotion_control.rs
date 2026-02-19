@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Starting locomotion control example");
 
-    // Create client with 2-second timeout
+    // Create client
     let client = BoosterClient::new()?;
 
     // Change to walking mode
