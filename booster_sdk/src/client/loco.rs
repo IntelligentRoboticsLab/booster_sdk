@@ -1,20 +1,22 @@
 //! High-level B1 locomotion client built on DDS RPC and topic I/O.
 
-use crate::dds::RpcClient;
 use crate::dds::{
     BatteryState, BinaryData, ButtonEventMsg, DdsNode, DdsPublisher, DdsSubscription,
     GripperControl, LightControlMsg, MotionState, RemoteControllerState, RobotProcessStateMsg,
-    RobotStatusDdsMsg, RpcClientOptions, SafeMode, battery_state_topic, button_event_topic,
-    device_gateway_topic, gripper_control_topic, light_control_topic, motion_state_topic,
-    process_state_topic, remote_controller_topic, safe_mode_topic, video_stream_topic,
+    RobotStatusDdsMsg, RpcClient, RpcClientOptions, SafeMode, battery_state_topic,
+    button_event_topic, device_gateway_topic, gripper_control_topic, light_control_topic,
+    motion_state_topic, process_state_topic, remote_controller_topic, safe_mode_topic,
+    video_stream_topic,
 };
 use crate::types::{
     BoosterHandType, CustomTrainedTraj, DanceId, DexterousFingerParameter, Frame, GetModeResponse,
-    GetRobotInfoResponse, GetStatusResponse, GripperControlMode, GripperMotionParameter,
-    HandAction, HandIndex, LoadCustomTrainedTrajResponse, LocoApiId, Result, RobotMode, Transform,
-    WholeBodyDanceId,
+    GetRobotInfoResponse, GetStatusResponse, GripperControlMode, GripperMode,
+    GripperMotionParameter, Hand, HandAction, HandIndex, LoadCustomTrainedTrajResponse, LocoApiId,
+    Result, RobotMode, Transform, WholeBodyDanceId,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use typed_builder::TypedBuilder;
 
 // The controller may send an intermediate pending status (-1) before the
 // final success response. Mode transitions (especially PREPARE) can take
@@ -376,7 +378,7 @@ impl BoosterClient {
     }
 
     /// Publish a high-level gripper command.
-    pub fn publish_gripper_command(&self, command: &crate::client::GripperCommand) -> Result<()> {
+    pub fn publish_gripper_command(&self, command: &GripperCommand) -> Result<()> {
         self.gripper_publisher.write(command.to_dds_control())
     }
 
@@ -426,5 +428,72 @@ impl BoosterClient {
     }
 }
 
-/// Alias matching the C++ class naming.
-pub type B1LocoClient = BoosterClient;
+/// Gripper control command
+#[derive(Debug, Clone, Copy, TypedBuilder, Serialize, Deserialize)]
+pub struct GripperCommand {
+    /// Target hand
+    pub hand: Hand,
+
+    /// Control mode (position or force)
+    pub mode: GripperMode,
+
+    /// Motion parameter value
+    /// - Position mode: 0-1000 (0 = fully open, 1000 = fully closed)
+    /// - Force mode: 50-1000 (grasping force)
+    pub motion_param: u16,
+
+    /// Movement speed (1-1000)
+    #[builder(default = 500)]
+    pub speed: u16,
+}
+
+impl GripperCommand {
+    /// Create a command to open the gripper
+    #[must_use]
+    pub fn open(hand: Hand) -> Self {
+        Self {
+            hand,
+            mode: GripperMode::Position,
+            motion_param: 0,
+            speed: 500,
+        }
+    }
+
+    /// Create a command to close the gripper
+    #[must_use]
+    pub fn close(hand: Hand) -> Self {
+        Self {
+            hand,
+            mode: GripperMode::Position,
+            motion_param: 1000,
+            speed: 500,
+        }
+    }
+
+    /// Create a force-based grasp command
+    #[must_use]
+    pub fn grasp(hand: Hand, force: u16) -> Self {
+        Self {
+            hand,
+            mode: GripperMode::Force,
+            motion_param: force.clamp(50, 1000),
+            speed: 500,
+        }
+    }
+
+    /// Convert to DDS gripper control message.
+    #[must_use]
+    pub fn to_dds_control(&self) -> crate::dds::GripperControl {
+        let (position, force) = match self.mode {
+            GripperMode::Position => (self.motion_param as i32, 0),
+            GripperMode::Force => (0, self.motion_param as i32),
+        };
+
+        crate::dds::GripperControl {
+            hand_index: u8::from(self.hand),
+            position,
+            force,
+            speed: self.speed as i32,
+        }
+    }
+}
