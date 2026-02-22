@@ -67,7 +67,8 @@ This will create a wheel file in `booster_sdk_py/dist/` that can be installed wi
 Note: Python bindings are intentionally minimal and expose a subset of the Rust API.
 
 ```python
-from booster_sdk import BoosterClient, GripperCommand, Hand, RobotMode
+from booster_sdk.client.booster import BoosterClient
+from booster_sdk.types import GripperCommand, Hand, RobotMode
 
 client = BoosterClient()
 

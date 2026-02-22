@@ -4,7 +4,7 @@
 //!
 //! Run with: cargo run --example `locomotion_control`
 
-use booster_sdk::client::BoosterClient;
+use booster_sdk::client::loco::BoosterClient;
 use booster_sdk::types::RobotMode;
 use tokio::time::Duration;
 
