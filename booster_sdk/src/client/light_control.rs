@@ -57,9 +57,7 @@ impl LightControlClient {
 
     /// Set LED light color from RGB values.
     pub async fn set_led_light_color(&self, r: u8, g: u8, b: u8) -> Result<()> {
-        let param = SetLedLightColorParameter { r, g, b };
-        self.rpc
-            .call_serialized(LightApiId::SetLedLightColor, &param)
+        self.set_led_light_color_param(&SetLedLightColorParameter { r, g, b })
             .await
     }
 

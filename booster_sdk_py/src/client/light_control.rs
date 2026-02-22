@@ -29,10 +29,6 @@ impl PyLightControlClient {
             .map_err(to_py_err)
     }
 
-    fn set_led_light_color_param(&self, py: Python<'_>, r: u8, g: u8, b: u8) -> PyResult<()> {
-        self.set_led_light_color(py, r, g, b)
-    }
-
     fn stop_led_light_control(&self, py: Python<'_>) -> PyResult<()> {
         let client = Arc::clone(&self.client);
         wait_for_future(py, async move { client.stop_led_light_control().await }).map_err(to_py_err)
