@@ -89,6 +89,19 @@ jobs:
                   name: wheels-${{ matrix.platform.id }}
                   path: dist/*.whl
 
+    publish-crate:
+        runs-on: ubuntu-22.04
+        environment: release
+        steps:
+            - uses: actions/checkout@v4
+            - uses: prefix-dev/setup-pixi@v0.9.1
+              with:
+                  pixi-version: v0.63.2
+            - name: Publish to crates.io
+              run: pixi run cargo publish
+              env:
+                  CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
     publish:
         runs-on: ubuntu-22.04
         needs: build
