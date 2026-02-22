@@ -1,11 +1,9 @@
 //! X5 camera control RPC client.
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 
 use crate::dds::{RpcClient, RpcClientOptions, X5_CAMERA_CONTROL_API_TOPIC};
 use crate::types::Result;
-
-use super::util::{EmptyResponse, serialize_param};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(into = "i32", try_from = "i32")]
@@ -121,40 +119,20 @@ impl X5CameraClient {
     }
 
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
-        let rpc = RpcClient::new(options.with_service_topic(X5_CAMERA_CONTROL_API_TOPIC))?;
+        let rpc = RpcClient::for_topic(options, X5_CAMERA_CONTROL_API_TOPIC)?;
         Ok(Self { rpc })
-    }
-
-    pub async fn send_api_request(&self, api_id: X5CameraApiId, param: &str) -> Result<()> {
-        self.rpc
-            .call_with_body::<EmptyResponse>(i32::from(api_id), param.to_owned(), None)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn send_api_request_with_response<R>(
-        &self,
-        api_id: X5CameraApiId,
-        param: &str,
-    ) -> Result<R>
-    where
-        R: DeserializeOwned + Send + 'static,
-    {
-        self.rpc
-            .call_with_body(i32::from(api_id), param.to_owned(), None)
-            .await
     }
 
     pub async fn change_mode(&self, mode: CameraSetMode) -> Result<()> {
         let param = ChangeModeParameter {
             mode: i32::from(mode),
         };
-        self.send_api_request(X5CameraApiId::ChangeMode, &serialize_param(&param)?)
+        self.rpc
+            .call_serialized(X5CameraApiId::ChangeMode, &param)
             .await
     }
 
     pub async fn get_status(&self) -> Result<GetStatusResponse> {
-        self.send_api_request_with_response(X5CameraApiId::GetStatus, "")
-            .await
+        self.rpc.call_response(X5CameraApiId::GetStatus, "").await
     }
 }

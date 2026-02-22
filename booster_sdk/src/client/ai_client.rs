@@ -1,14 +1,12 @@
 //! AI and LUI high-level RPC clients.
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 
 use crate::dds::{
     AI_API_TOPIC, DdsNode, DdsSubscription, LUI_API_TOPIC, RpcClient, RpcClientOptions,
     ai_subtitle_topic, lui_asr_chunk_topic,
 };
 use crate::types::Result;
-
-use super::util::{EmptyResponse, serialize_param};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(into = "i32", try_from = "i32")]
@@ -141,7 +139,6 @@ pub const BOOSTER_ROBOT_USER_ID: &str = "BoosterRobot";
 /// High-level RPC client for AI chat features.
 pub struct AiClient {
     rpc: RpcClient,
-    node: DdsNode,
 }
 
 impl AiClient {
@@ -150,62 +147,42 @@ impl AiClient {
     }
 
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
-        let rpc = RpcClient::new(options.with_service_topic(AI_API_TOPIC))?;
-        let node = rpc.node().clone();
-        Ok(Self { rpc, node })
+        let rpc = RpcClient::for_topic(options, AI_API_TOPIC)?;
+        Ok(Self { rpc })
     }
 
     pub fn node(&self) -> &DdsNode {
-        &self.node
-    }
-
-    pub async fn send_api_request(&self, api_id: AiApiId, param: &str) -> Result<()> {
-        self.rpc
-            .call_with_body::<EmptyResponse>(i32::from(api_id), param.to_owned(), None)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn send_api_request_with_response<R>(&self, api_id: AiApiId, param: &str) -> Result<R>
-    where
-        R: DeserializeOwned + Send + 'static,
-    {
-        self.rpc
-            .call_with_body(i32::from(api_id), param.to_owned(), None)
-            .await
+        self.rpc.node()
     }
 
     pub async fn start_ai_chat(&self, param: &StartAiChatParameter) -> Result<()> {
-        self.send_api_request(AiApiId::StartAiChat, &serialize_param(param)?)
-            .await
+        self.rpc.call_serialized(AiApiId::StartAiChat, param).await
     }
 
     pub async fn stop_ai_chat(&self) -> Result<()> {
-        self.send_api_request(AiApiId::StopAiChat, "").await
+        self.rpc.call_void(AiApiId::StopAiChat, "").await
     }
 
     pub async fn speak(&self, param: &SpeakParameter) -> Result<()> {
-        self.send_api_request(AiApiId::Speak, &serialize_param(param)?)
-            .await
+        self.rpc.call_serialized(AiApiId::Speak, param).await
     }
 
     pub async fn start_face_tracking(&self) -> Result<()> {
-        self.send_api_request(AiApiId::StartFaceTracking, "").await
+        self.rpc.call_void(AiApiId::StartFaceTracking, "").await
     }
 
     pub async fn stop_face_tracking(&self) -> Result<()> {
-        self.send_api_request(AiApiId::StopFaceTracking, "").await
+        self.rpc.call_void(AiApiId::StopFaceTracking, "").await
     }
 
     pub fn subscribe_subtitle(&self) -> Result<DdsSubscription<Subtitle>> {
-        self.node.subscribe(&ai_subtitle_topic(), 16)
+        self.rpc.node().subscribe(&ai_subtitle_topic(), 16)
     }
 }
 
 /// High-level RPC client for LUI ASR/TTS features.
 pub struct LuiClient {
     rpc: RpcClient,
-    node: DdsNode,
 }
 
 impl LuiClient {
@@ -214,58 +191,35 @@ impl LuiClient {
     }
 
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
-        let rpc = RpcClient::new(options.with_service_topic(LUI_API_TOPIC))?;
-        let node = rpc.node().clone();
-        Ok(Self { rpc, node })
+        let rpc = RpcClient::for_topic(options, LUI_API_TOPIC)?;
+        Ok(Self { rpc })
     }
 
     pub fn node(&self) -> &DdsNode {
-        &self.node
-    }
-
-    pub async fn send_api_request(&self, api_id: LuiApiId, param: &str) -> Result<()> {
-        self.rpc
-            .call_with_body::<EmptyResponse>(i32::from(api_id), param.to_owned(), None)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn send_api_request_with_response<R>(
-        &self,
-        api_id: LuiApiId,
-        param: &str,
-    ) -> Result<R>
-    where
-        R: DeserializeOwned + Send + 'static,
-    {
-        self.rpc
-            .call_with_body(i32::from(api_id), param.to_owned(), None)
-            .await
+        self.rpc.node()
     }
 
     pub async fn start_asr(&self) -> Result<()> {
-        self.send_api_request(LuiApiId::StartAsr, "").await
+        self.rpc.call_void(LuiApiId::StartAsr, "").await
     }
 
     pub async fn stop_asr(&self) -> Result<()> {
-        self.send_api_request(LuiApiId::StopAsr, "").await
+        self.rpc.call_void(LuiApiId::StopAsr, "").await
     }
 
     pub async fn start_tts(&self, config: &LuiTtsConfig) -> Result<()> {
-        self.send_api_request(LuiApiId::StartTts, &serialize_param(config)?)
-            .await
+        self.rpc.call_serialized(LuiApiId::StartTts, config).await
     }
 
     pub async fn stop_tts(&self) -> Result<()> {
-        self.send_api_request(LuiApiId::StopTts, "").await
+        self.rpc.call_void(LuiApiId::StopTts, "").await
     }
 
     pub async fn send_tts_text(&self, param: &LuiTtsParameter) -> Result<()> {
-        self.send_api_request(LuiApiId::SendTtsText, &serialize_param(param)?)
-            .await
+        self.rpc.call_serialized(LuiApiId::SendTtsText, param).await
     }
 
     pub fn subscribe_asr_chunk(&self) -> Result<DdsSubscription<AsrChunk>> {
-        self.node.subscribe(&lui_asr_chunk_topic(), 16)
+        self.rpc.node().subscribe(&lui_asr_chunk_topic(), 16)
     }
 }

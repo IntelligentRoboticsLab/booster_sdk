@@ -4,7 +4,6 @@ pub mod ai_client;
 pub mod commands;
 pub mod light_control_client;
 pub mod loco_client;
-mod util;
 pub mod vision_client;
 pub mod x5_camera_client;
 

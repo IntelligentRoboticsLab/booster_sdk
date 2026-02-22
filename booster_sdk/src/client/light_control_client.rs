@@ -1,11 +1,9 @@
 //! LED light control RPC client.
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 
 use crate::dds::{LIGHT_CONTROL_API_TOPIC, RpcClient, RpcClientOptions};
 use crate::types::Result;
-
-use super::util::{EmptyResponse, serialize_param};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(into = "i32", try_from = "i32")]
@@ -67,43 +65,26 @@ impl LightControlClient {
     }
 
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
-        let rpc = RpcClient::new(options.with_service_topic(LIGHT_CONTROL_API_TOPIC))?;
+        let rpc = RpcClient::for_topic(options, LIGHT_CONTROL_API_TOPIC)?;
         Ok(Self { rpc })
-    }
-
-    pub async fn send_api_request(&self, api_id: LightApiId, param: &str) -> Result<()> {
-        self.rpc
-            .call_with_body::<EmptyResponse>(i32::from(api_id), param.to_owned(), None)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn send_api_request_with_response<R>(
-        &self,
-        api_id: LightApiId,
-        param: &str,
-    ) -> Result<R>
-    where
-        R: DeserializeOwned + Send + 'static,
-    {
-        self.rpc
-            .call_with_body(i32::from(api_id), param.to_owned(), None)
-            .await
     }
 
     pub async fn set_led_light_color(&self, r: u8, g: u8, b: u8) -> Result<()> {
         let param = SetLedLightColorParameter { r, g, b };
-        self.send_api_request(LightApiId::SetLedLightColor, &serialize_param(&param)?)
+        self.rpc
+            .call_serialized(LightApiId::SetLedLightColor, &param)
             .await
     }
 
     pub async fn set_led_light_color_param(&self, param: &SetLedLightColorParameter) -> Result<()> {
-        self.send_api_request(LightApiId::SetLedLightColor, &serialize_param(param)?)
+        self.rpc
+            .call_serialized(LightApiId::SetLedLightColor, param)
             .await
     }
 
     pub async fn stop_led_light_control(&self) -> Result<()> {
-        self.send_api_request(LightApiId::StopLedLightControl, "")
+        self.rpc
+            .call_void(LightApiId::StopLedLightControl, "")
             .await
     }
 }

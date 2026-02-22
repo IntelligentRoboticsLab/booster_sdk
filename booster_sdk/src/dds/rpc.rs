@@ -1,6 +1,6 @@
 //! RPC client for high-level API requests over DDS.
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -56,6 +56,9 @@ pub struct RpcClient {
     default_timeout: Duration,
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct EmptyResponse {}
+
 fn parse_status_value(value: &Value) -> Option<i32> {
     match value {
         Value::Number(n) => n.as_i64().and_then(|v| i32::try_from(v).ok()),
@@ -97,6 +100,10 @@ fn normalize_service_topic(service_topic: &str) -> String {
 }
 
 impl RpcClient {
+    pub fn for_topic(options: RpcClientOptions, service_topic: impl Into<String>) -> Result<Self> {
+        Self::new(options.with_service_topic(service_topic))
+    }
+
     pub fn new(options: RpcClientOptions) -> Result<Self> {
         let node = DdsNode::new(super::DdsConfig {
             domain_id: options.domain_id,
@@ -118,6 +125,57 @@ impl RpcClient {
 
     pub fn node(&self) -> &DdsNode {
         &self.node
+    }
+
+    pub async fn call_void<ApiId>(&self, api_id: ApiId, body: impl Into<String>) -> Result<()>
+    where
+        ApiId: Into<i32> + Copy,
+    {
+        self.call_void_with_timeout(api_id, body, None).await
+    }
+
+    pub async fn call_void_with_timeout<ApiId>(
+        &self,
+        api_id: ApiId,
+        body: impl Into<String>,
+        timeout: Option<Duration>,
+    ) -> Result<()>
+    where
+        ApiId: Into<i32> + Copy,
+    {
+        self.call_with_body::<EmptyResponse>(api_id.into(), body.into(), timeout)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn call_response<ApiId, R>(&self, api_id: ApiId, body: impl Into<String>) -> Result<R>
+    where
+        ApiId: Into<i32> + Copy,
+        R: DeserializeOwned + Send + 'static,
+    {
+        self.call_with_body(api_id.into(), body.into(), None).await
+    }
+
+    pub async fn call_serialized<ApiId, P>(&self, api_id: ApiId, params: &P) -> Result<()>
+    where
+        ApiId: Into<i32> + Copy,
+        P: Serialize,
+    {
+        self.call_void(api_id, serde_json::to_string(params)?).await
+    }
+
+    pub async fn call_serialized_response<ApiId, P, R>(
+        &self,
+        api_id: ApiId,
+        params: &P,
+    ) -> Result<R>
+    where
+        ApiId: Into<i32> + Copy,
+        P: Serialize,
+        R: DeserializeOwned + Send + 'static,
+    {
+        self.call_response(api_id, serde_json::to_string(params)?)
+            .await
     }
 
     pub async fn call<P, R>(&self, api_id: i32, params: &P, timeout: Option<Duration>) -> Result<R>

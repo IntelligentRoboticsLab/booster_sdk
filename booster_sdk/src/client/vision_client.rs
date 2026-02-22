@@ -1,12 +1,10 @@
 //! Vision service RPC client.
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::dds::{RpcClient, RpcClientOptions, VISION_API_TOPIC};
 use crate::types::Result;
-
-use super::util::{EmptyResponse, serialize_param};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(into = "i32", try_from = "i32")]
@@ -77,28 +75,8 @@ impl VisionClient {
     }
 
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
-        let rpc = RpcClient::new(options.with_service_topic(VISION_API_TOPIC))?;
+        let rpc = RpcClient::for_topic(options, VISION_API_TOPIC)?;
         Ok(Self { rpc })
-    }
-
-    pub async fn send_api_request(&self, api_id: VisionApiId, param: &str) -> Result<()> {
-        self.rpc
-            .call_with_body::<EmptyResponse>(i32::from(api_id), param.to_owned(), None)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn send_api_request_with_response<R>(
-        &self,
-        api_id: VisionApiId,
-        param: &str,
-    ) -> Result<R>
-    where
-        R: DeserializeOwned + Send + 'static,
-    {
-        self.rpc
-            .call_with_body(i32::from(api_id), param.to_owned(), None)
-            .await
     }
 
     pub async fn start_vision_service(
@@ -112,12 +90,14 @@ impl VisionClient {
             enable_color,
             enable_face_detection,
         };
-        self.send_api_request(VisionApiId::StartVisionService, &serialize_param(&param)?)
+        self.rpc
+            .call_serialized(VisionApiId::StartVisionService, &param)
             .await
     }
 
     pub async fn stop_vision_service(&self) -> Result<()> {
-        self.send_api_request(VisionApiId::StopVisionService, "{}")
+        self.rpc
+            .call_void(VisionApiId::StopVisionService, "{}")
             .await
     }
 
@@ -127,10 +107,8 @@ impl VisionClient {
     ) -> Result<Vec<DetectResults>> {
         let param = GetDetectionObjectParameter { focus_ratio };
         let value: Value = self
-            .send_api_request_with_response(
-                VisionApiId::GetDetectionObject,
-                &serialize_param(&param)?,
-            )
+            .rpc
+            .call_serialized_response(VisionApiId::GetDetectionObject, &param)
             .await?;
 
         if value.is_array() {
