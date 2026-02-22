@@ -6,7 +6,7 @@ use crate::dds::{RpcClient, RpcClientOptions, X5_CAMERA_CONTROL_API_TOPIC};
 use crate::types::Result;
 
 crate::api_id_enum! {
-    pub enum X5CameraApiId {
+    X5CameraApiId {
         ChangeMode = 5001,
         GetStatus = 5002,
     }

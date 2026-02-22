@@ -17,8 +17,47 @@ pub use x5_camera_client::*;
 #[macro_export]
 macro_rules! api_id_enum {
     (
+        $name:ident {
+            $(
+                $(#[$variant_meta:meta])*
+                $variant:ident = $value:literal
+            ),+ $(,)?
+        }
+    ) => {
+        $crate::api_id_enum! {
+            @impl
+            pub $name {
+                $(
+                    $(#[$variant_meta])*
+                    $variant = $value
+                ),+
+            }
+        }
+    };
+    (
         $(#[$meta:meta])*
-        $vis:vis enum $name:ident {
+        $vis:vis $name:ident {
+            $(
+                $(#[$variant_meta:meta])*
+                $variant:ident = $value:literal
+            ),+ $(,)?
+        }
+    ) => {
+        $crate::api_id_enum! {
+            @impl
+            $(#[$meta])*
+            $vis $name {
+                $(
+                    $(#[$variant_meta])*
+                    $variant = $value
+                ),+
+            }
+        }
+    };
+    (
+        @impl
+        $(#[$meta:meta])*
+        $vis:vis $name:ident {
             $(
                 $(#[$variant_meta:meta])*
                 $variant:ident = $value:literal

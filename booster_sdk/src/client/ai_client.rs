@@ -9,7 +9,7 @@ use crate::dds::{
 use crate::types::Result;
 
 crate::api_id_enum! {
-    pub enum AiApiId {
+    AiApiId {
         StartAiChat = 2000,
         StopAiChat = 2001,
         Speak = 2002,
@@ -19,7 +19,7 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
-    pub enum LuiApiId {
+    LuiApiId {
         StartAsr = 1000,
         StopAsr = 1001,
         StartTts = 1050,

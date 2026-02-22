@@ -7,7 +7,7 @@ use crate::dds::{RpcClient, RpcClientOptions, VISION_API_TOPIC};
 use crate::types::Result;
 
 crate::api_id_enum! {
-    pub enum VisionApiId {
+    VisionApiId {
         StartVisionService = 3000,
         StopVisionService = 3001,
         GetDetectionObject = 3002,

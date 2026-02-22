@@ -6,7 +6,7 @@ use crate::dds::{LIGHT_CONTROL_API_TOPIC, RpcClient, RpcClientOptions};
 use crate::types::Result;
 
 crate::api_id_enum! {
-    pub enum LightApiId {
+    LightApiId {
         SetLedLightColor = 2000,
         StopLedLightControl = 2001,
     }

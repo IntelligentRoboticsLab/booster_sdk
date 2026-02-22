@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::{Hand, RobotMode};
 
 crate::api_id_enum! {
-    pub enum LocoApiId {
+    LocoApiId {
         ChangeMode = 2000,
         Move = 2001,
         RotateHead = 2004,
