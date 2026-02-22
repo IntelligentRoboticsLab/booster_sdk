@@ -6,12 +6,14 @@ use crate::dds::{LIGHT_CONTROL_API_TOPIC, RpcClient, RpcClientOptions};
 use crate::types::Result;
 
 crate::api_id_enum! {
+    /// LED light control RPC API identifiers.
     LightApiId {
         SetLedLightColor = 2000,
         StopLedLightControl = 2001,
     }
 }
 
+/// RGB color payload for LED control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetLedLightColorParameter {
     pub r: u8,
@@ -20,6 +22,7 @@ pub struct SetLedLightColorParameter {
 }
 
 impl SetLedLightColorParameter {
+    /// Parse a `#RRGGBB` color string.
     #[must_use]
     pub fn from_hex(color: &str) -> Option<Self> {
         let color = color.trim();
@@ -41,15 +44,18 @@ pub struct LightControlClient {
 }
 
 impl LightControlClient {
+    /// Create a light control client with default options.
     pub fn new() -> Result<Self> {
         Self::with_options(RpcClientOptions::for_service(LIGHT_CONTROL_API_TOPIC))
     }
 
+    /// Create a light control client with custom RPC options.
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
         let rpc = RpcClient::for_topic(options, LIGHT_CONTROL_API_TOPIC)?;
         Ok(Self { rpc })
     }
 
+    /// Set LED light color from RGB values.
     pub async fn set_led_light_color(&self, r: u8, g: u8, b: u8) -> Result<()> {
         let param = SetLedLightColorParameter { r, g, b };
         self.rpc
@@ -57,12 +63,14 @@ impl LightControlClient {
             .await
     }
 
+    /// Set LED light color using a parameter struct.
     pub async fn set_led_light_color_param(&self, param: &SetLedLightColorParameter) -> Result<()> {
         self.rpc
             .call_serialized(LightApiId::SetLedLightColor, param)
             .await
     }
 
+    /// Stop LED light control.
     pub async fn stop_led_light_control(&self) -> Result<()> {
         self.rpc
             .call_void(LightApiId::StopLedLightControl, "")

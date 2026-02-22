@@ -7,6 +7,7 @@ use crate::dds::{RpcClient, RpcClientOptions, VISION_API_TOPIC};
 use crate::types::Result;
 
 crate::api_id_enum! {
+    /// Vision service RPC API identifiers.
     VisionApiId {
         StartVisionService = 3000,
         StopVisionService = 3001,
@@ -14,6 +15,7 @@ crate::api_id_enum! {
     }
 }
 
+/// Parameters for starting the vision service.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StartVisionServiceParameter {
     pub enable_position: bool,
@@ -21,6 +23,7 @@ pub struct StartVisionServiceParameter {
     pub enable_face_detection: bool,
 }
 
+/// Parameters for object detection requests.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GetDetectionObjectParameter {
     pub focus_ratio: f32,
@@ -32,6 +35,7 @@ impl Default for GetDetectionObjectParameter {
     }
 }
 
+/// Single vision detection result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DetectResults {
     pub xmin: i64,
@@ -50,15 +54,18 @@ pub struct VisionClient {
 }
 
 impl VisionClient {
+    /// Create a vision client with default options.
     pub fn new() -> Result<Self> {
         Self::with_options(RpcClientOptions::for_service(VISION_API_TOPIC))
     }
 
+    /// Create a vision client with custom RPC options.
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
         let rpc = RpcClient::for_topic(options, VISION_API_TOPIC)?;
         Ok(Self { rpc })
     }
 
+    /// Start the vision service with selected features.
     pub async fn start_vision_service(
         &self,
         enable_position: bool,
@@ -75,12 +82,14 @@ impl VisionClient {
             .await
     }
 
+    /// Stop the vision service.
     pub async fn stop_vision_service(&self) -> Result<()> {
         self.rpc
             .call_void(VisionApiId::StopVisionService, "{}")
             .await
     }
 
+    /// Fetch detected objects with a custom focus ratio.
     pub async fn get_detection_object_with_ratio(
         &self,
         focus_ratio: f32,
@@ -102,6 +111,7 @@ impl VisionClient {
         Ok(Vec::new())
     }
 
+    /// Fetch detected objects with the default focus ratio.
     pub async fn get_detection_object(&self) -> Result<Vec<DetectResults>> {
         self.get_detection_object_with_ratio(GetDetectionObjectParameter::default().focus_ratio)
             .await

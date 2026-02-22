@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::{Hand, RobotMode};
 
 crate::api_id_enum! {
+    /// Locomotion RPC API identifiers.
     LocoApiId {
         ChangeMode = 2000,
         Move = 2001,
@@ -44,6 +45,7 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
+    /// High-level body behavior identifiers.
     BodyControl {
         Unknown = 0,
         Damping = 1,
@@ -62,6 +64,7 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
+    /// High-level action identifiers.
     Action {
         Unknown = 0,
         HandShake = 1,
@@ -83,6 +86,7 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
+    /// Reference frame identifiers used in transforms.
     Frame {
         Unknown = -1,
         Body = 0,
@@ -95,6 +99,7 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
+    /// Hand open/close action identifiers.
     HandAction {
         Open = 0,
         Close = 1,
@@ -102,6 +107,7 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
+    /// Supported dexterous hand hardware identifiers.
     BoosterHandType {
         InspireHand = 0,
         InspireTouchHand = 2,
@@ -111,6 +117,7 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
+    /// Upper-body dance and gesture identifiers.
     DanceId {
         NewYear = 0,
         Nezha = 1,
@@ -125,6 +132,7 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
+    /// Whole-body dance identifiers.
     WholeBodyDanceId {
         ArbicDance = 0,
         MichaelDance1 = 1,
@@ -137,6 +145,7 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
+    /// Joint ordering identifiers for model compatibility.
     JointOrder {
         MuJoCo = 0,
         IsaacLab = 1,
@@ -144,12 +153,14 @@ crate::api_id_enum! {
 }
 
 crate::api_id_enum! {
+    /// Gripper command mode identifiers.
     GripperControlMode {
         Position = 0,
         Force = 1,
     }
 }
 
+/// Cartesian position.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Position {
     pub x: f32,
@@ -157,6 +168,7 @@ pub struct Position {
     pub z: f32,
 }
 
+/// Euler orientation in radians.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Orientation {
     pub roll: f32,
@@ -164,12 +176,14 @@ pub struct Orientation {
     pub yaw: f32,
 }
 
+/// Position and orientation pair.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Posture {
     pub position: Position,
     pub orientation: Orientation,
 }
 
+/// Quaternion orientation.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Quaternion {
     pub x: f32,
@@ -178,12 +192,14 @@ pub struct Quaternion {
     pub w: f32,
 }
 
+/// Transform with position and quaternion orientation.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Transform {
     pub position: Position,
     pub orientation: Quaternion,
 }
 
+/// Gripper motion command values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GripperMotionParameter {
     pub position: i32,
@@ -191,6 +207,7 @@ pub struct GripperMotionParameter {
     pub speed: i32,
 }
 
+/// Single dexterous finger control value set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DexterousFingerParameter {
     pub seq: i32,
@@ -199,18 +216,21 @@ pub struct DexterousFingerParameter {
     pub speed: i32,
 }
 
+/// Response payload for `GetMode`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GetModeResponse {
     pub mode: i32,
 }
 
 impl GetModeResponse {
+    /// Convert `mode` to [`RobotMode`], if valid.
     #[must_use]
     pub fn mode_enum(&self) -> Option<RobotMode> {
         RobotMode::try_from(self.mode).ok()
     }
 }
 
+/// Response payload for `GetStatus`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GetStatusResponse {
     pub current_mode: i32,
@@ -219,16 +239,19 @@ pub struct GetStatusResponse {
 }
 
 impl GetStatusResponse {
+    /// Convert `current_mode` to [`RobotMode`], if valid.
     #[must_use]
     pub fn current_mode_enum(&self) -> Option<RobotMode> {
         RobotMode::try_from(self.current_mode).ok()
     }
 
+    /// Convert `current_body_control` to [`BodyControl`], if valid.
     #[must_use]
     pub fn current_body_control_enum(&self) -> Option<BodyControl> {
         BodyControl::try_from(self.current_body_control).ok()
     }
 
+    /// Convert valid entries in `current_actions` to [`Action`].
     #[must_use]
     pub fn current_actions_enum(&self) -> Vec<Action> {
         self.current_actions
@@ -239,6 +262,7 @@ impl GetStatusResponse {
     }
 }
 
+/// Basic robot identity and version information.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GetRobotInfoResponse {
     pub name: String,
@@ -248,6 +272,7 @@ pub struct GetRobotInfoResponse {
     pub serial_number: String,
 }
 
+/// Model parameters used by custom trajectories.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CustomModelParams {
     pub action_scale: Vec<f64>,
@@ -255,6 +280,7 @@ pub struct CustomModelParams {
     pub kd: Vec<f64>,
 }
 
+/// Model metadata for custom trajectories.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CustomModel {
     pub file_path: String,
@@ -262,12 +288,14 @@ pub struct CustomModel {
     pub joint_order: JointOrder,
 }
 
+/// Payload used to load a custom trained trajectory.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CustomTrainedTraj {
     pub traj_file_path: String,
     pub model: CustomModel,
 }
 
+/// Response payload for `LoadCustomTrainedTraj`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoadCustomTrainedTrajResponse {
     pub tid: String,

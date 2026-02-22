@@ -14,6 +14,13 @@ pub use loco_client::*;
 pub use vision_client::*;
 pub use x5_camera_client::*;
 
+/// Declare an i32-backed enum with serde, `From<i32>`, and `TryFrom<i32>`.
+///
+/// Default form makes the enum `pub`:
+/// `api_id_enum! { Name { A = 1, B = 2 } }`
+///
+/// You can also pass attributes and visibility:
+/// `api_id_enum! { #[non_exhaustive] pub(crate) Name { A = 1 } }`
 #[macro_export]
 macro_rules! api_id_enum {
     (
