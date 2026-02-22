@@ -1,9 +1,55 @@
 use std::sync::Arc;
 
-use booster_sdk::client::ai::LuiClient;
+use booster_sdk::client::ai::{LuiClient, LuiTtsConfig, LuiTtsParameter};
 use pyo3::{Bound, prelude::*, types::PyModule};
 
-use crate::{PyLuiTtsConfig, PyLuiTtsParameter, runtime::wait_for_future, to_py_err};
+use crate::{runtime::wait_for_future, to_py_err};
+
+#[pyclass(module = "booster_sdk_bindings", name = "LuiTtsConfig")]
+#[derive(Clone)]
+pub struct PyLuiTtsConfig(LuiTtsConfig);
+
+#[pymethods]
+impl PyLuiTtsConfig {
+    #[new]
+    fn new(voice_type: String) -> Self {
+        Self(LuiTtsConfig { voice_type })
+    }
+
+    #[getter]
+    fn voice_type(&self) -> String {
+        self.0.voice_type.clone()
+    }
+}
+
+impl From<PyLuiTtsConfig> for LuiTtsConfig {
+    fn from(value: PyLuiTtsConfig) -> Self {
+        value.0
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "LuiTtsParameter")]
+#[derive(Clone)]
+pub struct PyLuiTtsParameter(LuiTtsParameter);
+
+#[pymethods]
+impl PyLuiTtsParameter {
+    #[new]
+    fn new(text: String) -> Self {
+        Self(LuiTtsParameter { text })
+    }
+
+    #[getter]
+    fn text(&self) -> String {
+        self.0.text.clone()
+    }
+}
+
+impl From<PyLuiTtsParameter> for LuiTtsParameter {
+    fn from(value: PyLuiTtsParameter) -> Self {
+        value.0
+    }
+}
 
 #[pyclass(module = "booster_sdk_bindings", name = "LuiClient", unsendable)]
 pub struct PyLuiClient {
@@ -48,6 +94,8 @@ impl PyLuiClient {
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<PyLuiTtsConfig>()?;
+    m.add_class::<PyLuiTtsParameter>()?;
     m.add_class::<PyLuiClient>()?;
     Ok(())
 }
