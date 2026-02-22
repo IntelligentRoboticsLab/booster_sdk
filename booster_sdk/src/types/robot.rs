@@ -4,9 +4,13 @@ use serde::{Deserialize, Serialize};
 
 /// Robot operational mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(into = "i32", try_from = "i32")]
 #[repr(i32)]
 #[non_exhaustive]
 pub enum RobotMode {
+    /// Unknown mode, typically used for error handling.
+    Unknown = -1,
+
     /// Damping mode, motors are compliant
     Damping = 0,
 
@@ -24,16 +28,17 @@ pub enum RobotMode {
 }
 
 impl TryFrom<i32> for RobotMode {
-    type Error = ();
+    type Error = &'static str;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
+            -1 => Ok(RobotMode::Unknown),
             0 => Ok(RobotMode::Damping),
             1 => Ok(RobotMode::Prepare),
             2 => Ok(RobotMode::Walking),
             3 => Ok(RobotMode::Custom),
             4 => Ok(RobotMode::Soccer),
-            _ => Err(()),
+            _ => Err("invalid value"),
         }
     }
 }
@@ -102,6 +107,7 @@ impl TryFrom<i32> for Hand {
 
 /// Gripper control mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(into = "i32", try_from = "i32")]
 #[repr(i32)]
 pub enum GripperMode {
     /// Position-based control
@@ -118,13 +124,13 @@ impl From<GripperMode> for i32 {
 }
 
 impl TryFrom<i32> for GripperMode {
-    type Error = ();
+    type Error = &'static str;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(GripperMode::Position),
             1 => Ok(GripperMode::Force),
-            _ => Err(()),
+            _ => Err("invalid value"),
         }
     }
 }
@@ -135,9 +141,10 @@ mod tests {
 
     #[test]
     fn test_robot_mode_conversion() {
+        assert_eq!(RobotMode::try_from(-1), Ok(RobotMode::Unknown));
         assert_eq!(RobotMode::try_from(0), Ok(RobotMode::Damping));
         assert_eq!(RobotMode::try_from(2), Ok(RobotMode::Walking));
-        assert_eq!(RobotMode::try_from(99), Err(()));
+        assert_eq!(RobotMode::try_from(99), Err("invalid value"));
 
         assert_eq!(i32::from(RobotMode::Walking), 2);
     }
@@ -146,6 +153,6 @@ mod tests {
     fn test_gripper_mode_conversion() {
         assert_eq!(GripperMode::try_from(0), Ok(GripperMode::Position));
         assert_eq!(GripperMode::try_from(1), Ok(GripperMode::Force));
-        assert_eq!(GripperMode::try_from(2), Err(()));
+        assert_eq!(GripperMode::try_from(2), Err("invalid value"));
     }
 }

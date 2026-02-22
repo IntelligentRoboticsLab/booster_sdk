@@ -72,6 +72,12 @@ pub enum RpcError {
     #[error("Server refused request: {0}")]
     ServerRefused(String),
 
+    #[error("Request conflicts with current robot state: {0}")]
+    Conflict(String),
+
+    #[error("Request rejected because it is too frequent: {0}")]
+    RequestTooFrequent(String),
+
     #[error("State transition failed: {0}")]
     StateTransitionFailed(String),
 
@@ -92,6 +98,8 @@ impl RpcError {
                 timeout: Duration::ZERO,
             },
             400 => RpcError::BadRequest(message),
+            409 => RpcError::Conflict(message),
+            429 => RpcError::RequestTooFrequent(message),
             500 => RpcError::InternalServerError(message),
             501 => RpcError::ServerRefused(message),
             502 => RpcError::StateTransitionFailed(message),
