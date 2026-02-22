@@ -138,10 +138,16 @@ pub struct GripperControl {
     pub speed: i32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LightPixel {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightControlMsg {
-    /// Raw payload for light control (schema not documented in DDS reference).
-    pub data: Vec<u8>,
+    pub pixels: Vec<LightPixel>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

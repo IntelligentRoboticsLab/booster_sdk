@@ -4,7 +4,7 @@
 //!
 //! Run with: cargo run --example `gripper_control`
 
-use booster_sdk::client::{BoosterClient, commands::GripperCommand};
+use booster_sdk::client::loco::{BoosterClient, GripperCommand};
 use booster_sdk::types::{Hand, RobotMode};
 
 #[tokio::main]

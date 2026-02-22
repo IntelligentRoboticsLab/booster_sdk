@@ -1,16 +1,10 @@
-"""Booster SDK - Python bindings for controlling the Booster robot"""
+"""Booster SDK Python package.
+
+Use module-scoped imports:
+- `booster_sdk.client.<module>`
+- `booster_sdk.types`
+"""
 
 from __future__ import annotations
 
-from .client import BoosterClient
-from .types import BoosterSdkError, GripperCommand, GripperMode, Hand, RobotMode
-
-__all__ = [
-    # Client
-    "BoosterClient",
-    "BoosterSdkError",
-    "RobotMode",
-    "Hand",
-    "GripperMode",
-    "GripperCommand",
-]
+__all__ = ["client", "types"]

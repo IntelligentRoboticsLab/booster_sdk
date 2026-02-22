@@ -4,7 +4,7 @@
 //!
 //! Run with: cargo run --example `look_around`
 
-use booster_sdk::client::BoosterClient;
+use booster_sdk::client::loco::BoosterClient;
 use tokio::time::Duration;
 
 #[tokio::main]

@@ -3,7 +3,7 @@ members = ["booster_sdk", "booster_sdk_py"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0-alpha.6"
+version = "0.1.0-alpha.7"
 edition = "2024"
 authors = ["Team whIRLwind"]
 license = "MIT OR Apache-2.0"

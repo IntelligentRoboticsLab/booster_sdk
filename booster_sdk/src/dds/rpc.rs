@@ -1,6 +1,6 @@
 //! RPC client for high-level API requests over DDS.
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -12,12 +12,13 @@ use crate::types::{DdsError, Result, RpcError};
 
 use super::DdsNode;
 use super::messages::{RpcReqMsg, RpcRespMsg};
-use super::topics::{loco_request_topic, loco_response_topic};
+use super::topics::{LOCO_API_TOPIC, rpc_request_topic, rpc_response_topic};
 
 #[derive(Debug)]
 pub struct RpcClientOptions {
     pub domain_id: u16,
     pub default_timeout: Duration,
+    pub service_topic: String,
 }
 
 impl Default for RpcClientOptions {
@@ -27,7 +28,24 @@ impl Default for RpcClientOptions {
             // 5 s is a safe default for most commands. Mode changes are slow,
             // so change_mode passes its own longer timeout.
             default_timeout: Duration::from_secs(5),
+            service_topic: LOCO_API_TOPIC.to_owned(),
         }
+    }
+}
+
+impl RpcClientOptions {
+    #[must_use]
+    pub fn for_service(service_topic: impl Into<String>) -> Self {
+        Self {
+            service_topic: service_topic.into(),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn with_service_topic(mut self, service_topic: impl Into<String>) -> Self {
+        self.service_topic = service_topic.into();
+        self
     }
 }
 
@@ -37,6 +55,9 @@ pub struct RpcClient {
     response_reader: Arc<Mutex<DataReader<RpcRespMsg>>>,
     default_timeout: Duration,
 }
+
+#[derive(Debug, Deserialize, Default)]
+struct EmptyResponse {}
 
 fn parse_status_value(value: &Value) -> Option<i32> {
     match value {
@@ -64,14 +85,33 @@ where
     serde_json::from_str(trimmed)
 }
 
+fn normalize_service_topic(service_topic: &str) -> String {
+    let trimmed = service_topic.trim();
+    if trimmed.is_empty() {
+        return LOCO_API_TOPIC.to_owned();
+    }
+    if let Some(base) = trimmed.strip_suffix("Req") {
+        return base.to_owned();
+    }
+    if let Some(base) = trimmed.strip_suffix("Resp") {
+        return base.to_owned();
+    }
+    trimmed.to_owned()
+}
+
 impl RpcClient {
+    pub fn for_topic(options: RpcClientOptions, service_topic: impl Into<String>) -> Result<Self> {
+        Self::new(options.with_service_topic(service_topic))
+    }
+
     pub fn new(options: RpcClientOptions) -> Result<Self> {
         let node = DdsNode::new(super::DdsConfig {
             domain_id: options.domain_id,
         })?;
 
-        let request_topic = loco_request_topic();
-        let response_topic = loco_response_topic();
+        let service_topic = normalize_service_topic(&options.service_topic);
+        let request_topic = rpc_request_topic(&service_topic);
+        let response_topic = rpc_response_topic(&service_topic);
         let request_writer = node.publisher::<RpcReqMsg>(&request_topic)?;
         let response_reader = node.subscribe_reader::<RpcRespMsg>(&response_topic)?;
 
@@ -87,17 +127,80 @@ impl RpcClient {
         &self.node
     }
 
+    pub async fn call_void<ApiId>(&self, api_id: ApiId, body: impl Into<String>) -> Result<()>
+    where
+        ApiId: Into<i32> + Copy,
+    {
+        self.call_void_with_timeout(api_id, body, None).await
+    }
+
+    pub async fn call_void_with_timeout<ApiId>(
+        &self,
+        api_id: ApiId,
+        body: impl Into<String>,
+        timeout: Option<Duration>,
+    ) -> Result<()>
+    where
+        ApiId: Into<i32> + Copy,
+    {
+        self.call_with_body::<EmptyResponse>(api_id.into(), body.into(), timeout)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn call_response<ApiId, R>(&self, api_id: ApiId, body: impl Into<String>) -> Result<R>
+    where
+        ApiId: Into<i32> + Copy,
+        R: DeserializeOwned + Send + 'static,
+    {
+        self.call_with_body(api_id.into(), body.into(), None).await
+    }
+
+    pub async fn call_serialized<ApiId, P>(&self, api_id: ApiId, params: &P) -> Result<()>
+    where
+        ApiId: Into<i32> + Copy,
+        P: Serialize,
+    {
+        self.call_void(api_id, serde_json::to_string(params)?).await
+    }
+
+    pub async fn call_serialized_response<ApiId, P, R>(
+        &self,
+        api_id: ApiId,
+        params: &P,
+    ) -> Result<R>
+    where
+        ApiId: Into<i32> + Copy,
+        P: Serialize,
+        R: DeserializeOwned + Send + 'static,
+    {
+        self.call_response(api_id, serde_json::to_string(params)?)
+            .await
+    }
+
     pub async fn call<P, R>(&self, api_id: i32, params: &P, timeout: Option<Duration>) -> Result<R>
     where
         P: Serialize,
         R: DeserializeOwned + Send + 'static,
     {
-        let request_id = Uuid::new_v4().to_string();
-
         let body = serde_json::to_string(params).map_err(|e| {
             RpcError::BadRequest(format!("Failed to serialize request parameters: {e}"))
         })?;
 
+        self.call_with_body(api_id, body, timeout).await
+    }
+
+    pub async fn call_with_body<R>(
+        &self,
+        api_id: i32,
+        body: impl Into<String>,
+        timeout: Option<Duration>,
+    ) -> Result<R>
+    where
+        R: DeserializeOwned + Send + 'static,
+    {
+        let request_id = Uuid::new_v4().to_string();
+        let body = body.into();
         let header = serde_json::json!({ "api_id": api_id }).to_string();
 
         let request = RpcReqMsg {

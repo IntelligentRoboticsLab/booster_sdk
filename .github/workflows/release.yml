@@ -1,109 +1,123 @@
 name: Release
 
 on:
-    workflow_dispatch:
+  workflow_dispatch:
 
 permissions:
-    contents: read
+  contents: read
 
 jobs:
-    build:
-        name: Build wheels (${{ matrix.platform.id }})
-        runs-on: ${{ matrix.platform.runner }}
-        strategy:
-            fail-fast: false
-            matrix:
-                platform:
-                    # manylinux_2_28 x86_64 (cp310-cp313)
-                    - id: manylinux_2_28-x86_64
-                      runner: ubuntu-22.04
-                      target: x86_64-unknown-linux-gnu
-                      manylinux: "2_28"
-                      maturin_args: >-
-                          --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi
-                          -i python3.10 -i python3.11 -i python3.12 -i python3.13
+  build:
+    name: Build wheels (${{ matrix.platform.id }})
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          # manylinux_2_28 x86_64 (cp310-cp313)
+          - id: manylinux_2_28-x86_64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+            maturin_args: >-
+              --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi
+              -i python3.10 -i python3.11 -i python3.12 -i python3.13
 
-                    # manylinux_2_28 aarch64 (cp310-cp313)
-                    - id: manylinux_2_28-aarch64
-                      runner: ubuntu-22.04
-                      target: aarch64-unknown-linux-gnu
-                      manylinux: "2_28"
-                      maturin_args: >-
-                          --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi
-                          -i python3.10 -i python3.11 -i python3.12 -i python3.13
+          # manylinux_2_28 aarch64 (cp310-cp313)
+          - id: manylinux_2_28-aarch64
+            runner: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            manylinux: "2_28"
+            maturin_args: >-
+              --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi
+              -i python3.10 -i python3.11 -i python3.12 -i python3.13
 
-                    # macOS arm64 (cp310)
-                    - id: macos-arm64-cp310
-                      runner: macos-14
-                      target: aarch64-apple-darwin
-                      python: "3.10"
-                      manylinux: ""
-                      maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
+          # macOS arm64 (cp310)
+          - id: macos-arm64-cp310
+            runner: macos-14
+            target: aarch64-apple-darwin
+            python: "3.10"
+            manylinux: ""
+            maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
 
-                    # macOS arm64 (cp311)
-                    - id: macos-arm64-cp311
-                      runner: macos-14
-                      target: aarch64-apple-darwin
-                      python: "3.11"
-                      manylinux: ""
-                      maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
+          # macOS arm64 (cp311)
+          - id: macos-arm64-cp311
+            runner: macos-14
+            target: aarch64-apple-darwin
+            python: "3.11"
+            manylinux: ""
+            maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
 
-                    # macOS arm64 (cp312)
-                    - id: macos-arm64-cp312
-                      runner: macos-14
-                      target: aarch64-apple-darwin
-                      python: "3.12"
-                      manylinux: ""
-                      maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
+          # macOS arm64 (cp312)
+          - id: macos-arm64-cp312
+            runner: macos-14
+            target: aarch64-apple-darwin
+            python: "3.12"
+            manylinux: ""
+            maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
 
-                    # macOS arm64 (cp313)
-                    - id: macos-arm64-cp313
-                      runner: macos-14
-                      target: aarch64-apple-darwin
-                      python: "3.13"
-                      manylinux: ""
-                      maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
+          # macOS arm64 (cp313)
+          - id: macos-arm64-cp313
+            runner: macos-14
+            target: aarch64-apple-darwin
+            python: "3.13"
+            manylinux: ""
+            maturin_args: --release --manifest-path booster_sdk_py/Cargo.toml --out dist --compatibility pypi -i python
 
-        steps:
-            - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-            # Only needed for macOS builds (Linux manylinux builds run inside the container and
-            # actions/setup-python won't affect those).
-            - name: Setup Python (macOS only)
-              if: startsWith(matrix.platform.runner, 'macos')
-              uses: actions/setup-python@v5
-              with:
-                  python-version: ${{ matrix.platform.python }}
+      # Only needed for macOS builds (Linux manylinux builds run inside the container and
+      # actions/setup-python won't affect those).
+      - name: Setup Python (macOS only)
+        if: startsWith(matrix.platform.runner, 'macos')
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.platform.python }}
 
-            - name: Build wheels
-              uses: PyO3/maturin-action@v1
-              with:
-                  command: build
-                  target: ${{ matrix.platform.target }}
-                  manylinux: ${{ matrix.platform.manylinux }}
-                  args: ${{ matrix.platform.maturin_args }}
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          target: ${{ matrix.platform.target }}
+          manylinux: ${{ matrix.platform.manylinux }}
+          args: ${{ matrix.platform.maturin_args }}
 
-            - name: Upload wheels
-              uses: actions/upload-artifact@v4
-              with:
-                  name: wheels-${{ matrix.platform.id }}
-                  path: dist/*.whl
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.platform.id }}
+          path: dist/*.whl
 
-    publish:
-        runs-on: ubuntu-22.04
-        needs: build
-        environment: release
-        permissions:
-            id-token: write
-        steps:
-            - uses: actions/download-artifact@v4
-              with:
-                  pattern: wheels-*
-                  merge-multiple: true
-                  path: dist/
+  publish-crate:
+    runs-on: ubuntu-22.04
+    environment: release
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.1
+        with:
+          pixi-version: v0.63.2
+      - name: Publish to crates.io
+        run: pixi run cargo publish -p booster_sdk
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-            - name: Install uv
-              uses: astral-sh/setup-uv@v5
+  publish-pypi:
+    runs-on: ubuntu-22.04
+    needs: build
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist/
 
-            - name: Publish to PyPI
-              run: uv publish dist/*
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Publish to PyPI
+        run: uv publish dist/*
