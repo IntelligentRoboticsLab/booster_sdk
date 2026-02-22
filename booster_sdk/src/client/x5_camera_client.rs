@@ -12,63 +12,21 @@ crate::api_id_enum! {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-pub enum CameraSetMode {
-    CameraModeNormal = 0,
-    CameraModeHighResolution = 1,
-    CameraModeNormalEnable = 2,
-    CameraModeHighResolutionEnable = 3,
-}
-
-impl From<CameraSetMode> for i32 {
-    fn from(value: CameraSetMode) -> Self {
-        value as i32
+crate::api_id_enum! {
+    CameraSetMode {
+        CameraModeNormal = 0,
+        CameraModeHighResolution = 1,
+        CameraModeNormalEnable = 2,
+        CameraModeHighResolutionEnable = 3,
     }
 }
 
-impl TryFrom<i32> for CameraSetMode {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::CameraModeNormal),
-            1 => Ok(Self::CameraModeHighResolution),
-            2 => Ok(Self::CameraModeNormalEnable),
-            3 => Ok(Self::CameraModeHighResolutionEnable),
-            _ => Err("invalid value"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-pub enum CameraControlStatus {
-    CameraStatusNormal = 0,
-    CameraStatusHighResolution = 1,
-    CameraStatusError = 2,
-    CameraStatusNull = 3,
-}
-
-impl From<CameraControlStatus> for i32 {
-    fn from(value: CameraControlStatus) -> Self {
-        value as i32
-    }
-}
-
-impl TryFrom<i32> for CameraControlStatus {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::CameraStatusNormal),
-            1 => Ok(Self::CameraStatusHighResolution),
-            2 => Ok(Self::CameraStatusError),
-            3 => Ok(Self::CameraStatusNull),
-            _ => Err("invalid value"),
-        }
+crate::api_id_enum! {
+    CameraControlStatus {
+        CameraStatusNormal = 0,
+        CameraStatusHighResolution = 1,
+        CameraStatusError = 2,
+        CameraStatusNull = 3,
     }
 }
 

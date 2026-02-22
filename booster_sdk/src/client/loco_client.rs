@@ -15,6 +15,7 @@ use crate::types::{
     WholeBodyDanceId,
 };
 use serde_json::json;
+
 // The controller may send an intermediate pending status (-1) before the
 // final success response. Mode transitions (especially PREPARE) can take
 // several seconds.

@@ -36,6 +36,26 @@ macro_rules! api_id_enum {
     };
     (
         $(#[$meta:meta])*
+        $name:ident {
+            $(
+                $(#[$variant_meta:meta])*
+                $variant:ident = $value:literal
+            ),+ $(,)?
+        }
+    ) => {
+        $crate::api_id_enum! {
+            @impl
+            $(#[$meta])*
+            pub $name {
+                $(
+                    $(#[$variant_meta])*
+                    $variant = $value
+                ),+
+            }
+        }
+    };
+    (
+        $(#[$meta:meta])*
         $vis:vis $name:ident {
             $(
                 $(#[$variant_meta:meta])*

@@ -2,50 +2,27 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Robot operational mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-#[non_exhaustive]
-pub enum RobotMode {
-    /// Unknown mode, typically used for error handling.
-    Unknown = -1,
+crate::api_id_enum! {
+    /// Robot operational mode
+    #[non_exhaustive]
+    pub RobotMode {
+        /// Unknown mode, typically used for error handling.
+        Unknown = -1,
 
-    /// Damping mode, motors are compliant
-    Damping = 0,
+        /// Damping mode, motors are compliant
+        Damping = 0,
 
-    /// Prepare mode, standing pose
-    Prepare = 1,
+        /// Prepare mode, standing pose
+        Prepare = 1,
 
-    /// Walking mode, active locomotion
-    Walking = 2,
+        /// Walking mode, active locomotion
+        Walking = 2,
 
-    /// Custom mode, user-defined behavior
-    Custom = 3,
+        /// Custom mode, user-defined behavior
+        Custom = 3,
 
-    /// Soccer mode
-    Soccer = 4,
-}
-
-impl TryFrom<i32> for RobotMode {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            -1 => Ok(RobotMode::Unknown),
-            0 => Ok(RobotMode::Damping),
-            1 => Ok(RobotMode::Prepare),
-            2 => Ok(RobotMode::Walking),
-            3 => Ok(RobotMode::Custom),
-            4 => Ok(RobotMode::Soccer),
-            _ => Err("invalid value"),
-        }
-    }
-}
-
-impl From<RobotMode> for i32 {
-    fn from(mode: RobotMode) -> Self {
-        mode as i32
+        /// Soccer mode
+        Soccer = 4,
     }
 }
 
@@ -105,33 +82,14 @@ impl TryFrom<i32> for Hand {
     }
 }
 
-/// Gripper control mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-pub enum GripperMode {
-    /// Position-based control
-    Position = 0,
+crate::api_id_enum! {
+    /// Gripper control mode
+    GripperMode {
+        /// Position-based control
+        Position = 0,
 
-    /// Force-based control
-    Force = 1,
-}
-
-impl From<GripperMode> for i32 {
-    fn from(mode: GripperMode) -> Self {
-        mode as i32
-    }
-}
-
-impl TryFrom<i32> for GripperMode {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(GripperMode::Position),
-            1 => Ok(GripperMode::Force),
-            _ => Err("invalid value"),
-        }
+        /// Force-based control
+        Force = 1,
     }
 }
 
