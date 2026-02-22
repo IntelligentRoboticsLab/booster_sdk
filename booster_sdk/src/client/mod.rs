@@ -13,3 +13,46 @@ pub use light_control_client::*;
 pub use loco_client::*;
 pub use vision_client::*;
 pub use x5_camera_client::*;
+
+#[macro_export]
+macro_rules! api_id_enum {
+    (
+        $(#[$meta:meta])*
+        $vis:vis enum $name:ident {
+            $(
+                $(#[$variant_meta:meta])*
+                $variant:ident = $value:literal
+            ),+ $(,)?
+        }
+    ) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        #[serde(into = "i32", try_from = "i32")]
+        #[repr(i32)]
+        $(#[$meta])*
+        $vis enum $name {
+            $(
+                $(#[$variant_meta])*
+                $variant = $value,
+            )+
+        }
+
+        impl From<$name> for i32 {
+            fn from(value: $name) -> Self {
+                value as i32
+            }
+        }
+
+        impl TryFrom<i32> for $name {
+            type Error = &'static str;
+
+            fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
+                match value {
+                    $(
+                        $value => Ok(Self::$variant),
+                    )+
+                    _ => Err("invalid value"),
+                }
+            }
+        }
+    };
+}

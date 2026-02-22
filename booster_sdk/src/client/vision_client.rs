@@ -6,31 +6,11 @@ use serde_json::Value;
 use crate::dds::{RpcClient, RpcClientOptions, VISION_API_TOPIC};
 use crate::types::Result;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-pub enum VisionApiId {
-    StartVisionService = 3000,
-    StopVisionService = 3001,
-    GetDetectionObject = 3002,
-}
-
-impl From<VisionApiId> for i32 {
-    fn from(value: VisionApiId) -> Self {
-        value as i32
-    }
-}
-
-impl TryFrom<i32> for VisionApiId {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
-        match value {
-            3000 => Ok(Self::StartVisionService),
-            3001 => Ok(Self::StopVisionService),
-            3002 => Ok(Self::GetDetectionObject),
-            _ => Err("invalid value"),
-        }
+crate::api_id_enum! {
+    pub enum VisionApiId {
+        StartVisionService = 3000,
+        StopVisionService = 3001,
+        GetDetectionObject = 3002,
     }
 }
 

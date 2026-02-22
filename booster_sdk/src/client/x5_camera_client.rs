@@ -5,29 +5,10 @@ use serde::{Deserialize, Serialize};
 use crate::dds::{RpcClient, RpcClientOptions, X5_CAMERA_CONTROL_API_TOPIC};
 use crate::types::Result;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-pub enum X5CameraApiId {
-    ChangeMode = 5001,
-    GetStatus = 5002,
-}
-
-impl From<X5CameraApiId> for i32 {
-    fn from(value: X5CameraApiId) -> Self {
-        value as i32
-    }
-}
-
-impl TryFrom<i32> for X5CameraApiId {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
-        match value {
-            5001 => Ok(Self::ChangeMode),
-            5002 => Ok(Self::GetStatus),
-            _ => Err("invalid value"),
-        }
+crate::api_id_enum! {
+    pub enum X5CameraApiId {
+        ChangeMode = 5001,
+        GetStatus = 5002,
     }
 }
 

@@ -8,67 +8,23 @@ use crate::dds::{
 };
 use crate::types::Result;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-pub enum AiApiId {
-    StartAiChat = 2000,
-    StopAiChat = 2001,
-    Speak = 2002,
-    StartFaceTracking = 2003,
-    StopFaceTracking = 2004,
-}
-
-impl From<AiApiId> for i32 {
-    fn from(value: AiApiId) -> Self {
-        value as i32
+crate::api_id_enum! {
+    pub enum AiApiId {
+        StartAiChat = 2000,
+        StopAiChat = 2001,
+        Speak = 2002,
+        StartFaceTracking = 2003,
+        StopFaceTracking = 2004,
     }
 }
 
-impl TryFrom<i32> for AiApiId {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
-        match value {
-            2000 => Ok(Self::StartAiChat),
-            2001 => Ok(Self::StopAiChat),
-            2002 => Ok(Self::Speak),
-            2003 => Ok(Self::StartFaceTracking),
-            2004 => Ok(Self::StopFaceTracking),
-            _ => Err("invalid value"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-pub enum LuiApiId {
-    StartAsr = 1000,
-    StopAsr = 1001,
-    StartTts = 1050,
-    StopTts = 1051,
-    SendTtsText = 1052,
-}
-
-impl From<LuiApiId> for i32 {
-    fn from(value: LuiApiId) -> Self {
-        value as i32
-    }
-}
-
-impl TryFrom<i32> for LuiApiId {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
-        match value {
-            1000 => Ok(Self::StartAsr),
-            1001 => Ok(Self::StopAsr),
-            1050 => Ok(Self::StartTts),
-            1051 => Ok(Self::StopTts),
-            1052 => Ok(Self::SendTtsText),
-            _ => Err("invalid value"),
-        }
+crate::api_id_enum! {
+    pub enum LuiApiId {
+        StartAsr = 1000,
+        StopAsr = 1001,
+        StartTts = 1050,
+        StopTts = 1051,
+        SendTtsText = 1052,
     }
 }
 

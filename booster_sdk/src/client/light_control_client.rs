@@ -5,29 +5,10 @@ use serde::{Deserialize, Serialize};
 use crate::dds::{LIGHT_CONTROL_API_TOPIC, RpcClient, RpcClientOptions};
 use crate::types::Result;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-pub enum LightApiId {
-    SetLedLightColor = 2000,
-    StopLedLightControl = 2001,
-}
-
-impl From<LightApiId> for i32 {
-    fn from(value: LightApiId) -> Self {
-        value as i32
-    }
-}
-
-impl TryFrom<i32> for LightApiId {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
-        match value {
-            2000 => Ok(Self::SetLedLightColor),
-            2001 => Ok(Self::StopLedLightControl),
-            _ => Err("invalid value"),
-        }
+crate::api_id_enum! {
+    pub enum LightApiId {
+        SetLedLightColor = 2000,
+        StopLedLightControl = 2001,
     }
 }
 

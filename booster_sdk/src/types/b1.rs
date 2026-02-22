@@ -4,93 +4,42 @@ use serde::{Deserialize, Serialize};
 
 use super::{Hand, RobotMode};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(into = "i32", try_from = "i32")]
-#[repr(i32)]
-pub enum LocoApiId {
-    ChangeMode = 2000,
-    Move = 2001,
-    RotateHead = 2004,
-    WaveHand = 2005,
-    RotateHeadWithDirection = 2006,
-    LieDown = 2007,
-    GetUp = 2008,
-    MoveHandEndEffector = 2009,
-    ControlGripper = 2010,
-    GetFrameTransform = 2011,
-    SwitchHandEndEffectorControlMode = 2012,
-    ControlDexterousHand = 2013,
-    Handshake = 2015,
-    Dance = 2016,
-    GetMode = 2017,
-    GetStatus = 2018,
-    PushUp = 2019,
-    PlaySound = 2020,
-    StopSound = 2021,
-    GetRobotInfo = 2022,
-    StopHandEndEffector = 2023,
-    Shoot = 2024,
-    GetUpWithMode = 2025,
-    ZeroTorqueDrag = 2026,
-    RecordTrajectory = 2027,
-    ReplayTrajectory = 2028,
-    WholeBodyDance = 2029,
-    UpperBodyCustomControl = 2030,
-    ResetOdometry = 2031,
-    LoadCustomTrainedTraj = 2032,
-    ActivateCustomTrainedTraj = 2033,
-    UnloadCustomTrainedTraj = 2034,
-    EnterWbcGait = 2035,
-    ExitWbcGait = 2036,
-}
-
-impl From<LocoApiId> for i32 {
-    fn from(value: LocoApiId) -> Self {
-        value as i32
-    }
-}
-
-impl TryFrom<i32> for LocoApiId {
-    type Error = &'static str;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            2000 => Ok(Self::ChangeMode),
-            2001 => Ok(Self::Move),
-            2004 => Ok(Self::RotateHead),
-            2005 => Ok(Self::WaveHand),
-            2006 => Ok(Self::RotateHeadWithDirection),
-            2007 => Ok(Self::LieDown),
-            2008 => Ok(Self::GetUp),
-            2009 => Ok(Self::MoveHandEndEffector),
-            2010 => Ok(Self::ControlGripper),
-            2011 => Ok(Self::GetFrameTransform),
-            2012 => Ok(Self::SwitchHandEndEffectorControlMode),
-            2013 => Ok(Self::ControlDexterousHand),
-            2015 => Ok(Self::Handshake),
-            2016 => Ok(Self::Dance),
-            2017 => Ok(Self::GetMode),
-            2018 => Ok(Self::GetStatus),
-            2019 => Ok(Self::PushUp),
-            2020 => Ok(Self::PlaySound),
-            2021 => Ok(Self::StopSound),
-            2022 => Ok(Self::GetRobotInfo),
-            2023 => Ok(Self::StopHandEndEffector),
-            2024 => Ok(Self::Shoot),
-            2025 => Ok(Self::GetUpWithMode),
-            2026 => Ok(Self::ZeroTorqueDrag),
-            2027 => Ok(Self::RecordTrajectory),
-            2028 => Ok(Self::ReplayTrajectory),
-            2029 => Ok(Self::WholeBodyDance),
-            2030 => Ok(Self::UpperBodyCustomControl),
-            2031 => Ok(Self::ResetOdometry),
-            2032 => Ok(Self::LoadCustomTrainedTraj),
-            2033 => Ok(Self::ActivateCustomTrainedTraj),
-            2034 => Ok(Self::UnloadCustomTrainedTraj),
-            2035 => Ok(Self::EnterWbcGait),
-            2036 => Ok(Self::ExitWbcGait),
-            _ => Err("invalid value"),
-        }
+crate::api_id_enum! {
+    pub enum LocoApiId {
+        ChangeMode = 2000,
+        Move = 2001,
+        RotateHead = 2004,
+        WaveHand = 2005,
+        RotateHeadWithDirection = 2006,
+        LieDown = 2007,
+        GetUp = 2008,
+        MoveHandEndEffector = 2009,
+        ControlGripper = 2010,
+        GetFrameTransform = 2011,
+        SwitchHandEndEffectorControlMode = 2012,
+        ControlDexterousHand = 2013,
+        Handshake = 2015,
+        Dance = 2016,
+        GetMode = 2017,
+        GetStatus = 2018,
+        PushUp = 2019,
+        PlaySound = 2020,
+        StopSound = 2021,
+        GetRobotInfo = 2022,
+        StopHandEndEffector = 2023,
+        Shoot = 2024,
+        GetUpWithMode = 2025,
+        ZeroTorqueDrag = 2026,
+        RecordTrajectory = 2027,
+        ReplayTrajectory = 2028,
+        WholeBodyDance = 2029,
+        UpperBodyCustomControl = 2030,
+        ResetOdometry = 2031,
+        LoadCustomTrainedTraj = 2032,
+        ActivateCustomTrainedTraj = 2033,
+        UnloadCustomTrainedTraj = 2034,
+        EnterWbcGait = 2035,
+        ExitWbcGait = 2036,
     }
 }
 
