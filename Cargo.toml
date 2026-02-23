@@ -3,11 +3,12 @@ members = ["booster_sdk", "booster_sdk_py"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0-alpha.7"
+version = "0.1.0-alpha.8"
 edition = "2024"
 authors = ["Team whIRLwind"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/IntelligentRobotics/booster_sdk"
+repository = "https://github.com/IntelligentRoboticsLab/booster_sdk"
+readme = "README.md"
 
 [workspace.lints.rust]
 # TODO: re-enable this once we have docs for everything
