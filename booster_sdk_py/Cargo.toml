@@ -16,3 +16,4 @@ booster_sdk = { workspace = true }
 pyo3 = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

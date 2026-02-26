@@ -53,7 +53,7 @@ pub fn rpc_request_topic(service_topic: &str) -> TopicSpec {
     TopicSpec {
         name: format!("{service_topic}Req"),
         type_name: TYPE_RPC_REQ,
-        qos: qos_reliable_keep_last(10),
+        qos: qos_best_effort_keep_last(10),
         kind: TopicKind::NoKey,
     }
 }
@@ -62,7 +62,7 @@ pub fn rpc_response_topic(service_topic: &str) -> TopicSpec {
     TopicSpec {
         name: format!("{service_topic}Resp"),
         type_name: TYPE_RPC_RESP,
-        qos: qos_reliable_keep_last(10),
+        qos: qos_best_effort_keep_last(10),
         kind: TopicKind::NoKey,
     }
 }
