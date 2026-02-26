@@ -69,7 +69,8 @@ impl X5CameraClient {
     /// Create an X5 camera client with a custom startup wait before first RPC.
     pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
         Self::with_options(
-            RpcClientOptions::for_service(X5_CAMERA_CONTROL_API_TOPIC).with_startup_wait(startup_wait),
+            RpcClientOptions::for_service(X5_CAMERA_CONTROL_API_TOPIC)
+                .with_startup_wait(startup_wait),
         )
     }
 
