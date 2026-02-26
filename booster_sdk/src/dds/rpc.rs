@@ -112,15 +112,6 @@ fn rpc_debug_enabled() -> bool {
         .unwrap_or(false)
 }
 
-fn rpc_match_timeout() -> Duration {
-    let default_ms = 8000_u64;
-    let ms = std::env::var("BOOSTER_RPC_MATCH_TIMEOUT_MS")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(default_ms);
-    Duration::from_millis(ms)
-}
-
 fn preview_for_log(value: &str, max_chars: usize) -> String {
     let mut preview = String::new();
     let mut chars = value.chars();
@@ -137,19 +128,6 @@ fn preview_for_log(value: &str, max_chars: usize) -> String {
 }
 
 impl RpcClient {
-    fn wait_for_request_match(&self, max_wait: Duration) -> bool {
-        let deadline = Instant::now() + max_wait;
-        loop {
-            if !self.request_writer.get_matched_subscriptions().is_empty() {
-                return true;
-            }
-            if Instant::now() >= deadline {
-                return false;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-    }
-
     pub fn for_topic(options: RpcClientOptions, service_topic: impl Into<String>) -> Result<Self> {
         Self::new(options.with_service_topic(service_topic))
     }
@@ -251,24 +229,6 @@ impl RpcClient {
         R: DeserializeOwned + Send + 'static,
     {
         let debug_enabled = rpc_debug_enabled();
-        let match_timeout = rpc_match_timeout();
-        let matched = self.wait_for_request_match(match_timeout);
-        if debug_enabled {
-            tracing::debug!(
-                target: "booster_sdk::rpc",
-                service_topic = %self.service_topic,
-                matched,
-                match_wait_ms = match_timeout.as_millis(),
-                "rpc request writer match status"
-            );
-        }
-        if !matched {
-            return Err(RpcError::Timeout {
-                timeout: match_timeout,
-            }
-            .into());
-        }
-
         let request_id = Uuid::new_v4().to_string();
         let body = body.into();
         let header = serde_json::json!({ "api_id": api_id }).to_string();
