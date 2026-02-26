@@ -1,16 +1,32 @@
 mod client;
 mod runtime;
 
+use std::time::Duration;
 use std::sync::OnceLock;
 
 use booster_sdk::{client::ai::BOOSTER_ROBOT_USER_ID, types::BoosterError};
-use pyo3::{exceptions::PyException, prelude::*, types::PyModule};
+use pyo3::{exceptions::{PyException, PyValueError}, prelude::*, types::PyModule};
 use tracing_subscriber::{EnvFilter, fmt};
 
 pyo3::create_exception!(booster_sdk_bindings, BoosterSdkError, PyException);
 
 pub(crate) fn to_py_err(err: BoosterError) -> PyErr {
     BoosterSdkError::new_err(err.to_string())
+}
+
+pub(crate) fn startup_wait_from_seconds(startup_wait_sec: Option<f64>) -> PyResult<Option<Duration>> {
+    let Some(seconds) = startup_wait_sec else {
+        return Ok(None);
+    };
+
+    if !seconds.is_finite() {
+        return Err(PyValueError::new_err("startup_wait_sec must be finite"));
+    }
+    if seconds < 0.0 {
+        return Err(PyValueError::new_err("startup_wait_sec must be >= 0"));
+    }
+
+    Ok(Some(Duration::from_secs_f64(seconds)))
 }
 
 fn rpc_debug_enabled() -> bool {
