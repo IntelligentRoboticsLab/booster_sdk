@@ -284,6 +284,20 @@ impl RpcClient {
                     Ok(Some(sample)) => {
                         let response = sample.into_value();
 
+                        if response.uuid != request_id {
+                            if debug_enabled {
+                                tracing::debug!(
+                                    target: "booster_sdk::rpc",
+                                    service_topic = %service_topic,
+                                    api_id,
+                                    request_uuid = %request_id,
+                                    response_uuid = %response.uuid,
+                                    "ignoring response for a different request uuid"
+                                );
+                            }
+                            continue;
+                        }
+
                         let status_code = parse_status_from_header(&response.header).unwrap_or(0);
                         if debug_enabled {
                             tracing::debug!(
