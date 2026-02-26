@@ -1,10 +1,5 @@
-"""Booster SDK Python package.
-
-Use module-scoped imports:
-- `booster_sdk.client.<module>`
-- `booster_sdk.types`
-"""
+"""Booster SDK Python package."""
 
 from __future__ import annotations
 
-__all__ = ["client", "types"]
+__all__ = ["client"]

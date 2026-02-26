@@ -1,5 +1,7 @@
 //! X5 camera control RPC client.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 use crate::dds::{RpcClient, RpcClientOptions, X5_CAMERA_CONTROL_API_TOPIC};
@@ -62,6 +64,14 @@ impl X5CameraClient {
     /// Create an X5 camera client with default options.
     pub fn new() -> Result<Self> {
         Self::with_options(RpcClientOptions::for_service(X5_CAMERA_CONTROL_API_TOPIC))
+    }
+
+    /// Create an X5 camera client with a custom startup wait before first RPC.
+    pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
+        Self::with_options(
+            RpcClientOptions::for_service(X5_CAMERA_CONTROL_API_TOPIC)
+                .with_startup_wait(startup_wait),
+        )
     }
 
     /// Create an X5 camera client with custom RPC options.

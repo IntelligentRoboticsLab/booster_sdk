@@ -5,7 +5,7 @@ use booster_sdk::client::ai::{
 };
 use pyo3::{Bound, prelude::*, types::PyModule};
 
-use crate::{runtime::wait_for_future, to_py_err};
+use crate::{runtime::wait_for_future, startup_wait_from_seconds, to_py_err};
 
 #[pyclass(module = "booster_sdk_bindings", name = "TtsConfig")]
 #[derive(Clone)]
@@ -192,9 +192,17 @@ pub struct PyAiClient {
 #[pymethods]
 impl PyAiClient {
     #[new]
-    fn new() -> PyResult<Self> {
+    #[pyo3(signature = (startup_wait_sec=None))]
+    fn new(startup_wait_sec: Option<f64>) -> PyResult<Self> {
+        let startup_wait = startup_wait_from_seconds(startup_wait_sec)?;
+        let client = match startup_wait {
+            Some(wait) => AiClient::with_startup_wait(wait),
+            None => AiClient::new(),
+        }
+        .map_err(to_py_err)?;
+
         Ok(Self {
-            client: Arc::new(AiClient::new().map_err(to_py_err)?),
+            client: Arc::new(client),
         })
     }
 

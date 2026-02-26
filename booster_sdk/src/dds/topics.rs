@@ -4,7 +4,10 @@ use rustdds::{QosPolicies, Topic, TopicKind};
 
 use crate::types::{DdsError, Result};
 
-use super::qos::{qos_best_effort_keep_last, qos_reliable_keep_all, qos_reliable_keep_last};
+use super::qos::{
+    qos_best_effort_keep_last, qos_reliable_keep_all, qos_reliable_keep_last,
+    qos_reliable_transient_local_keep_last,
+};
 
 #[derive(Debug, Clone)]
 pub struct TopicSpec {
@@ -62,7 +65,7 @@ pub fn rpc_response_topic(service_topic: &str) -> TopicSpec {
     TopicSpec {
         name: format!("{service_topic}Resp"),
         type_name: TYPE_RPC_RESP,
-        qos: qos_reliable_keep_last(10),
+        qos: qos_reliable_transient_local_keep_last(10),
         kind: TopicKind::NoKey,
     }
 }

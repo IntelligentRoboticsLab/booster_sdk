@@ -54,11 +54,8 @@ pip install booster-sdk
 
 ### Python API Example
 
-Note: Python bindings are experimental.
-
 ```python
-from booster_sdk.client.booster import BoosterClient
-from booster_sdk.types import GripperCommand, Hand, RobotMode
+from booster_sdk.client.booster import BoosterClient, GripperCommand, Hand, RobotMode
 
 client = BoosterClient()
 

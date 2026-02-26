@@ -1,5 +1,7 @@
 //! High-level B1 locomotion client built on DDS RPC and topic I/O.
 
+use std::time::Duration;
+
 use crate::dds::{
     BatteryState, BinaryData, ButtonEventMsg, DdsNode, DdsPublisher, DdsSubscription,
     GripperControl, LightControlMsg, MotionState, RemoteControllerState, RobotProcessStateMsg,
@@ -21,7 +23,7 @@ use typed_builder::TypedBuilder;
 // The controller may send an intermediate pending status (-1) before the
 // final success response. Mode transitions (especially PREPARE) can take
 // several seconds.
-const CHANGE_MODE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const CHANGE_MODE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// High-level client for B1 locomotion control and telemetry.
 pub struct BoosterClient {
@@ -35,6 +37,11 @@ impl BoosterClient {
     /// Create a locomotion client with default options.
     pub fn new() -> Result<Self> {
         Self::with_options(RpcClientOptions::default())
+    }
+
+    /// Create a locomotion client with a custom startup wait before first RPC.
+    pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
+        Self::with_options(RpcClientOptions::default().with_startup_wait(startup_wait))
     }
 
     /// Create a locomotion client with custom RPC options.
