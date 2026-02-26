@@ -1,5 +1,7 @@
 //! AI and LUI high-level RPC clients.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 use crate::dds::{
@@ -113,6 +115,11 @@ impl AiClient {
         Self::with_options(RpcClientOptions::for_service(AI_API_TOPIC))
     }
 
+    /// Create an AI client with a custom startup wait before first RPC.
+    pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
+        Self::with_options(RpcClientOptions::for_service(AI_API_TOPIC).with_startup_wait(startup_wait))
+    }
+
     /// Create an AI client with custom RPC options.
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
         let rpc = RpcClient::for_topic(options, AI_API_TOPIC)?;
@@ -164,6 +171,11 @@ impl LuiClient {
     /// Create a LUI client with default options.
     pub fn new() -> Result<Self> {
         Self::with_options(RpcClientOptions::for_service(LUI_API_TOPIC))
+    }
+
+    /// Create a LUI client with a custom startup wait before first RPC.
+    pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
+        Self::with_options(RpcClientOptions::for_service(LUI_API_TOPIC).with_startup_wait(startup_wait))
     }
 
     /// Create a LUI client with custom RPC options.

@@ -1,5 +1,7 @@
 //! Vision service RPC client.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -57,6 +59,13 @@ impl VisionClient {
     /// Create a vision client with default options.
     pub fn new() -> Result<Self> {
         Self::with_options(RpcClientOptions::for_service(VISION_API_TOPIC))
+    }
+
+    /// Create a vision client with a custom startup wait before first RPC.
+    pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
+        Self::with_options(
+            RpcClientOptions::for_service(VISION_API_TOPIC).with_startup_wait(startup_wait),
+        )
     }
 
     /// Create a vision client with custom RPC options.

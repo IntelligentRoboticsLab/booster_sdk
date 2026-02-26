@@ -1,5 +1,7 @@
 //! LED light control RPC client.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 use crate::dds::{LIGHT_CONTROL_API_TOPIC, RpcClient, RpcClientOptions};
@@ -47,6 +49,13 @@ impl LightControlClient {
     /// Create a light control client with default options.
     pub fn new() -> Result<Self> {
         Self::with_options(RpcClientOptions::for_service(LIGHT_CONTROL_API_TOPIC))
+    }
+
+    /// Create a light control client with a custom startup wait before first RPC.
+    pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
+        Self::with_options(
+            RpcClientOptions::for_service(LIGHT_CONTROL_API_TOPIC).with_startup_wait(startup_wait),
+        )
     }
 
     /// Create a light control client with custom RPC options.

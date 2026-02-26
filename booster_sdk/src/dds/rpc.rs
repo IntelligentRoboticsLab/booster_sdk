@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -18,6 +19,7 @@ use super::topics::{LOCO_API_TOPIC, rpc_request_topic, rpc_response_topic};
 pub struct RpcClientOptions {
     pub domain_id: u16,
     pub default_timeout: Duration,
+    pub startup_wait: Duration,
     pub service_topic: String,
 }
 
@@ -28,6 +30,8 @@ impl Default for RpcClientOptions {
             // 5 s is a safe default for most commands. Mode changes are slow,
             // so change_mode passes its own longer timeout.
             default_timeout: Duration::from_secs(5),
+            // Wait once before the first RPC call so endpoint discovery can settle.
+            startup_wait: Duration::from_millis(3000),
             service_topic: LOCO_API_TOPIC.to_owned(),
         }
     }
@@ -47,6 +51,23 @@ impl RpcClientOptions {
         self.service_topic = service_topic.into();
         self
     }
+
+    #[must_use]
+    pub fn with_default_timeout(mut self, timeout: Duration) -> Self {
+        self.default_timeout = timeout;
+        self
+    }
+
+    #[must_use]
+    pub fn with_startup_wait(mut self, startup_wait: Duration) -> Self {
+        self.startup_wait = startup_wait;
+        self
+    }
+
+    #[must_use]
+    pub fn without_startup_wait(self) -> Self {
+        self.with_startup_wait(Duration::from_millis(0))
+    }
 }
 
 pub struct RpcClient {
@@ -54,6 +75,8 @@ pub struct RpcClient {
     request_writer: rustdds::no_key::DataWriter<RpcReqMsg>,
     response_reader: Arc<Mutex<DataReader<RpcRespMsg>>>,
     default_timeout: Duration,
+    startup_wait: Duration,
+    startup_wait_done: AtomicBool,
     service_topic: String,
 }
 
@@ -148,6 +171,8 @@ impl RpcClient {
             request_writer: request_writer.into_inner(),
             response_reader: Arc::new(Mutex::new(response_reader)),
             default_timeout: options.default_timeout,
+            startup_wait: options.startup_wait,
+            startup_wait_done: AtomicBool::new(false),
             service_topic,
         })
     }
@@ -229,6 +254,21 @@ impl RpcClient {
         R: DeserializeOwned + Send + 'static,
     {
         let debug_enabled = rpc_debug_enabled();
+
+        if self.startup_wait > Duration::from_millis(0)
+            && !self.startup_wait_done.swap(true, Ordering::SeqCst)
+        {
+            if debug_enabled {
+                tracing::debug!(
+                    target: "booster_sdk::rpc",
+                    service_topic = %self.service_topic,
+                    startup_wait_ms = self.startup_wait.as_millis(),
+                    "initial startup wait before first rpc call"
+                );
+            }
+            std::thread::sleep(self.startup_wait);
+        }
+
         let request_id = Uuid::new_v4().to_string();
         let body = body.into();
         let header = serde_json::json!({ "api_id": api_id }).to_string();
