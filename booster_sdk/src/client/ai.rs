@@ -117,7 +117,9 @@ impl AiClient {
 
     /// Create an AI client with a custom startup wait before first RPC.
     pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
-        Self::with_options(RpcClientOptions::for_service(AI_API_TOPIC).with_startup_wait(startup_wait))
+        Self::with_options(
+            RpcClientOptions::for_service(AI_API_TOPIC).with_startup_wait(startup_wait),
+        )
     }
 
     /// Create an AI client with custom RPC options.
@@ -175,7 +177,9 @@ impl LuiClient {
 
     /// Create a LUI client with a custom startup wait before first RPC.
     pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
-        Self::with_options(RpcClientOptions::for_service(LUI_API_TOPIC).with_startup_wait(startup_wait))
+        Self::with_options(
+            RpcClientOptions::for_service(LUI_API_TOPIC).with_startup_wait(startup_wait),
+        )
     }
 
     /// Create a LUI client with custom RPC options.

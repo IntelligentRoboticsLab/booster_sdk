@@ -1,11 +1,15 @@
 mod client;
 mod runtime;
 
-use std::time::Duration;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use booster_sdk::{client::ai::BOOSTER_ROBOT_USER_ID, types::BoosterError};
-use pyo3::{exceptions::{PyException, PyValueError}, prelude::*, types::PyModule};
+use pyo3::{
+    exceptions::{PyException, PyValueError},
+    prelude::*,
+    types::PyModule,
+};
 use tracing_subscriber::{EnvFilter, fmt};
 
 pyo3::create_exception!(booster_sdk_bindings, BoosterSdkError, PyException);
@@ -14,7 +18,9 @@ pub(crate) fn to_py_err(err: BoosterError) -> PyErr {
     BoosterSdkError::new_err(err.to_string())
 }
 
-pub(crate) fn startup_wait_from_seconds(startup_wait_sec: Option<f64>) -> PyResult<Option<Duration>> {
+pub(crate) fn startup_wait_from_seconds(
+    startup_wait_sec: Option<f64>,
+) -> PyResult<Option<Duration>> {
     let Some(seconds) = startup_wait_sec else {
         return Ok(None);
     };
@@ -48,10 +54,8 @@ fn init_tracing_for_python() {
             return;
         }
 
-        let env_filter = std::env::var("RUST_LOG")
-            .ok()
-            .and_then(|value| EnvFilter::try_new(value).ok())
-            .unwrap_or_else(|| EnvFilter::new("booster_sdk::rpc=debug"));
+        let env_filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("booster_sdk::rpc=debug"));
 
         let _ = fmt()
             .with_env_filter(env_filter)
