@@ -1,0 +1,12 @@
+[package]
+name = "booster_example_look_around"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+booster_sdk = { path = "../../../booster_sdk" }
+tokio = { version = "1.42", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[workspace]

@@ -1,8 +1,6 @@
 """High-level locomotion control example.
 
-This example demonstrates basic locomotion control using the BoosterClient.
-
-Run with: python examples/locomotion_control.py
+Run with: python examples/python/locomotion.py
 """
 
 import logging
@@ -17,15 +15,12 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     logger.info("Starting locomotion control example")
 
-    # Create client
     client = BoosterClient()
 
-    # Change to walking mode
     logger.info("Changing to walking mode...")
     client.change_mode(RobotMode.WALKING)
     logger.info("Mode changed successfully")
 
-    # Wait a moment for mode transition
     time.sleep(2)
 
     logger.info("Moving forward at 0.5 m/s for 3 seconds")
