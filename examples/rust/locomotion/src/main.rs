@@ -1,7 +1,7 @@
 //! High-level locomotion control example.
 //!
 //! Run with:
-//! `cargo run --manifest-path examples/rust/locomotion/Cargo.toml`
+//! `cargo run -p locomotion`
 
 use booster_sdk::client::loco::BoosterClient;
 use booster_sdk::types::RobotMode;
@@ -10,7 +10,7 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::new("off,booster_sdk=debug");
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
     tracing::info!("Starting locomotion control example");

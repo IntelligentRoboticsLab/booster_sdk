@@ -11,7 +11,7 @@ use tracing_subscriber::EnvFilter;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::new("off,booster_sdk=debug");
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
     tracing::info!("Starting gripper control example");
