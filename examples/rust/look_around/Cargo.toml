@@ -1,5 +1,5 @@
 [package]
-name = "booster_example_look_around"
+name = "look_around"
 version = "0.1.0"
 edition = "2024"
 

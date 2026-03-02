@@ -1,10 +1,5 @@
 [workspace]
-members = [
-    "booster_sdk",
-    "booster_sdk_py",
-    "examples/rust/locomotion",
-    "examples/rust/look_around",
-]
+members = ["booster_sdk", "booster_sdk_py", "examples/rust/*"]
 resolver = "2"
 
 [workspace.package]
