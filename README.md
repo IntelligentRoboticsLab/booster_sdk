@@ -14,37 +14,7 @@ In addition to the Rust crate, this repository also provides Python bindings bui
 
 This library is currently in active development and has been tested on a real robot.
 
-## API Examples
-
-### High-Level Locomotion Control
-
-```rust
-use booster_sdk::client::BoosterClient;
-use booster_sdk::types::{RobotMode, Hand};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize and create client
-    let client = BoosterClient::new()?;
-
-    // Change to walking mode
-    client.change_mode(RobotMode::Walking).await?;
-
-    // Move forward
-    client.move_robot(0.5, 0.0, 0.0).await?;
-
-    // Wave hand
-    // Publish gripper commands if needed (DDS topic-based control)
-    client.publish_gripper_command(&booster_sdk::client::GripperCommand::open(Hand::Right))?;
-
-    // Lie down when done
-    client.lie_down().await?;
-
-    Ok(())
-}
-```
-
-## Experimental Python Bindings
+## Installation
 
 Python wheels are available on [PyPI](https://pypi.org/project/booster-sdk/):
 
@@ -52,10 +22,10 @@ Python wheels are available on [PyPI](https://pypi.org/project/booster-sdk/):
 pip install booster-sdk
 ```
 
-### Python API Example
+## API Example
 
 ```python
-from booster_sdk.client.booster import BoosterClient, GripperCommand, Hand, RobotMode
+from booster_sdk.client.booster import BoosterClient, RobotMode
 
 client = BoosterClient()
 
@@ -65,11 +35,9 @@ client.change_mode(RobotMode.WALKING)
 # Move forward
 client.move_robot(0.5, 0.0, 0.0)
 
-# Open right gripper
-client.publish_gripper_command(GripperCommand.open(Hand.RIGHT))
 ```
 
-The Python bindings currently cover core control flows, including locomotion, gripper control, AI/LUI RPC calls, vision RPC calls, and X5 camera RPC calls.
+The Python bindings cover core control flows, including locomotion, gripper control, AI/LUI RPC calls, vision RPC calls, and X5 camera RPC calls.
 
 ## Contributing
 
