@@ -1,13 +1,13 @@
 //! RPC client for high-level API requests over DDS.
 
+use futures::StreamExt;
+use rustdds::no_key::DataReaderStream;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 use uuid::Uuid;
-
-use rustdds::no_key::DataReader;
-use std::sync::{Arc, Mutex};
 
 use crate::types::{DdsError, Result, RpcError};
 
@@ -73,7 +73,7 @@ impl RpcClientOptions {
 pub struct RpcClient {
     node: DdsNode,
     request_writer: rustdds::no_key::DataWriter<RpcReqMsg>,
-    response_reader: Arc<Mutex<DataReader<RpcRespMsg>>>,
+    response_stream: Mutex<DataReaderStream<RpcRespMsg>>,
     default_timeout: Duration,
     startup_wait: Duration,
     startup_wait_done: AtomicBool,
@@ -123,18 +123,6 @@ fn normalize_service_topic(service_topic: &str) -> String {
     trimmed.to_owned()
 }
 
-fn rpc_debug_enabled() -> bool {
-    std::env::var("BOOSTER_RPC_DEBUG")
-        .map(|value| {
-            let value = value.trim();
-            value == "1"
-                || value.eq_ignore_ascii_case("true")
-                || value.eq_ignore_ascii_case("yes")
-                || value.eq_ignore_ascii_case("on")
-        })
-        .unwrap_or(false)
-}
-
 fn preview_for_log(value: &str, max_chars: usize) -> String {
     let mut preview = String::new();
     let mut chars = value.chars();
@@ -164,12 +152,14 @@ impl RpcClient {
         let request_topic = rpc_request_topic(&service_topic);
         let response_topic = rpc_response_topic(&service_topic);
         let request_writer = node.publisher::<RpcReqMsg>(&request_topic)?;
-        let response_reader = node.subscribe_reader::<RpcRespMsg>(&response_topic)?;
+        let response_stream = node
+            .subscribe_reader::<RpcRespMsg>(&response_topic)?
+            .async_sample_stream();
 
         Ok(Self {
             node,
             request_writer: request_writer.into_inner(),
-            response_reader: Arc::new(Mutex::new(response_reader)),
+            response_stream: Mutex::new(response_stream),
             default_timeout: options.default_timeout,
             startup_wait: options.startup_wait,
             startup_wait_done: AtomicBool::new(false),
@@ -253,38 +243,35 @@ impl RpcClient {
     where
         R: DeserializeOwned + Send + 'static,
     {
-        let debug_enabled = rpc_debug_enabled();
-
         if self.startup_wait > Duration::from_millis(0)
             && !self.startup_wait_done.swap(true, Ordering::SeqCst)
         {
-            if debug_enabled {
-                tracing::debug!(
-                    target: "booster_sdk::rpc",
-                    service_topic = %self.service_topic,
-                    startup_wait_ms = self.startup_wait.as_millis(),
-                    "initial startup wait before first rpc call"
-                );
-            }
-            std::thread::sleep(self.startup_wait);
+            tracing::debug!(
+                target: "booster_sdk::rpc",
+                service_topic = %self.service_topic,
+                startup_wait_ms = self.startup_wait.as_millis(),
+                "initial startup wait before first rpc call"
+            );
+            tokio::time::sleep(self.startup_wait).await;
         }
+
+        // Single-flight per client: one response stream consumer at a time.
+        let mut response_stream = self.response_stream.lock().await;
 
         let request_id = Uuid::new_v4().to_string();
         let body = body.into();
         let header = serde_json::json!({ "api_id": api_id }).to_string();
         let service_topic = self.service_topic.clone();
 
-        if debug_enabled {
-            tracing::debug!(
-                target: "booster_sdk::rpc",
-                service_topic = %service_topic,
-                api_id,
-                request_uuid = %request_id,
-                header = %preview_for_log(&header, 200),
-                body = %preview_for_log(&body, 300),
-                "send rpc request"
-            );
-        }
+        tracing::debug!(
+            target: "booster_sdk::rpc",
+            service_topic = %service_topic,
+            api_id,
+            request_uuid = %request_id,
+            header = %preview_for_log(&header, 200),
+            body = %preview_for_log(&body, 300),
+            "send rpc request"
+        );
 
         let request = RpcReqMsg {
             uuid: request_id.clone(),
@@ -299,110 +286,92 @@ impl RpcClient {
         let timeout = timeout.unwrap_or(self.default_timeout);
         let deadline = Instant::now() + timeout;
 
-        let reader = self.response_reader.clone();
-
-        tokio::task::spawn_blocking(move || {
-            let mut reader = reader
-                .lock()
-                .map_err(|err| DdsError::ReceiveFailed(err.to_string()))?;
-            loop {
-                if Instant::now() >= deadline {
-                    if debug_enabled {
-                        tracing::warn!(
-                            target: "booster_sdk::rpc",
-                            service_topic = %service_topic,
-                            api_id,
-                            request_uuid = %request_id,
-                            timeout_ms = timeout.as_millis(),
-                            "rpc timeout"
-                        );
-                    }
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let response = match tokio::time::timeout(remaining, response_stream.next()).await {
+                Ok(Some(Ok(sample))) => sample.into_value(),
+                Ok(Some(Err(err))) => {
+                    tracing::warn!(
+                        target: "booster_sdk::rpc",
+                        service_topic = %service_topic,
+                        api_id,
+                        request_uuid = %request_id,
+                        error = %err,
+                        "rpc receive error"
+                    );
+                    return Err(DdsError::ReceiveFailed(err.to_string()).into());
+                }
+                Ok(None) => {
+                    return Err(
+                        DdsError::ReceiveFailed("rpc response stream closed".to_owned()).into(),
+                    );
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        target: "booster_sdk::rpc",
+                        service_topic = %service_topic,
+                        api_id,
+                        request_uuid = %request_id,
+                        timeout_ms = timeout.as_millis(),
+                        "rpc timeout"
+                    );
                     return Err(RpcError::Timeout { timeout }.into());
                 }
+            };
 
-                match reader.take_next_sample() {
-                    Ok(Some(sample)) => {
-                        let response = sample.into_value();
-
-                        if response.uuid != request_id {
-                            if debug_enabled {
-                                tracing::debug!(
-                                    target: "booster_sdk::rpc",
-                                    service_topic = %service_topic,
-                                    api_id,
-                                    request_uuid = %request_id,
-                                    response_uuid = %response.uuid,
-                                    "ignoring response for a different request uuid"
-                                );
-                            }
-                            continue;
-                        }
-
-                        let status_code = parse_status_from_header(&response.header).unwrap_or(0);
-                        if debug_enabled {
-                            tracing::debug!(
-                                target: "booster_sdk::rpc",
-                                service_topic = %service_topic,
-                                api_id,
-                                request_uuid = %request_id,
-                                response_uuid = %response.uuid,
-                                status_code,
-                                header = %preview_for_log(&response.header, 200),
-                                body = %preview_for_log(&response.body, 300),
-                                "recv rpc response"
-                            );
-                        }
-
-                        if status_code == -1 {
-                            if debug_enabled {
-                                tracing::debug!(
-                                    target: "booster_sdk::rpc",
-                                    service_topic = %service_topic,
-                                    api_id,
-                                    request_uuid = %request_id,
-                                    "ignoring intermediate status=-1"
-                                );
-                            }
-                            continue;
-                        }
-
-                        if status_code != 0 {
-                            let message = if response.body.trim().is_empty() {
-                                response.header
-                            } else {
-                                response.body
-                            };
-                            return Err(RpcError::from_status_code(status_code, message).into());
-                        }
-
-                        let result: R = decode_response_body(&response.body).map_err(|err| {
-                            RpcError::RequestFailed {
-                                status: status_code,
-                                message: format!("Failed to deserialize response body: {err}"),
-                            }
-                        })?;
-
-                        return Ok(result);
-                    }
-                    Ok(None) => std::thread::sleep(Duration::from_millis(5)),
-                    Err(err) => {
-                        if debug_enabled {
-                            tracing::warn!(
-                                target: "booster_sdk::rpc",
-                                service_topic = %service_topic,
-                                api_id,
-                                request_uuid = %request_id,
-                                error = %err,
-                                "rpc receive error"
-                            );
-                        }
-                        return Err(DdsError::ReceiveFailed(err.to_string()).into());
-                    }
-                }
+            if response.uuid != request_id {
+                tracing::debug!(
+                    target: "booster_sdk::rpc",
+                    service_topic = %service_topic,
+                    api_id,
+                    request_uuid = %request_id,
+                    response_uuid = %response.uuid,
+                    "ignoring response for a different request uuid"
+                );
+                continue;
             }
-        })
-        .await
-        .map_err(|err| DdsError::ReceiveFailed(err.to_string()))?
+
+            let status_code = parse_status_from_header(&response.header).unwrap_or(0);
+            tracing::debug!(
+                target: "booster_sdk::rpc",
+                service_topic = %service_topic,
+                api_id,
+                request_uuid = %request_id,
+                response_uuid = %response.uuid,
+                status_code,
+                header = %preview_for_log(&response.header, 200),
+                body = %preview_for_log(&response.body, 300),
+                "recv rpc response"
+            );
+
+            if status_code == -1 {
+                tracing::debug!(
+                    target: "booster_sdk::rpc",
+                    service_topic = %service_topic,
+                    api_id,
+                    request_uuid = %request_id,
+                    "ignoring intermediate status=-1"
+                );
+                continue;
+            }
+
+            if status_code != 0 {
+                let message = if response.body.trim().is_empty() {
+                    response.header
+                } else {
+                    response.body
+                };
+                return Err(RpcError::from_status_code(status_code, message).into());
+            }
+
+            let result: R =
+                decode_response_body(&response.body).map_err(|err| RpcError::RequestFailed {
+                    status: status_code,
+                    message: format!("Failed to deserialize response body: {err}"),
+                })?;
+
+            return Ok(result);
+        }
     }
 }
 

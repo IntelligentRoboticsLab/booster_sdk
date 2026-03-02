@@ -1,5 +1,7 @@
 /target
 
+examples/rust/**/target
+
 .ruff_cache/
 .mypy_cache/
 

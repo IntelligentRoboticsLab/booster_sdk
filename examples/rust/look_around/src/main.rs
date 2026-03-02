@@ -1,16 +1,16 @@
-//! Motion state subscription example
+//! Motion state subscription example.
 //!
-//! This example subscribes to the motion state topic over DDS.
-//!
-//! Run with: cargo run --example `look_around`
+//! Run with:
+//! `cargo run --manifest-path examples/rust/look_around/Cargo.toml`
 
 use booster_sdk::client::loco::BoosterClient;
 use tokio::time::Duration;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging
-    tracing_subscriber::fmt().with_env_filter("info").init();
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
     tracing::info!("Starting motion state subscription example");
 

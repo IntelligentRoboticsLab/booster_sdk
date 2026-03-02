@@ -20,11 +20,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use typed_builder::TypedBuilder;
 
-// The controller may send an intermediate pending status (-1) before the
-// final success response. Mode transitions (especially PREPARE) can take
-// several seconds.
-const CHANGE_MODE_TIMEOUT: Duration = Duration::from_secs(30);
-
 /// High-level client for B1 locomotion control and telemetry.
 pub struct BoosterClient {
     rpc: RpcClient,
@@ -68,9 +63,7 @@ impl BoosterClient {
     /// Change the robot mode.
     pub async fn change_mode(&self, mode: RobotMode) -> Result<()> {
         let param = json!({ "mode": i32::from(mode) }).to_string();
-        self.rpc
-            .call_void_with_timeout(LocoApiId::ChangeMode, param, Some(CHANGE_MODE_TIMEOUT))
-            .await
+        self.rpc.call_void(LocoApiId::ChangeMode, param).await
     }
 
     /// Get the current robot mode.
