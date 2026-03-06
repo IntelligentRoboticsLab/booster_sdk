@@ -1638,7 +1638,11 @@ impl PyBoosterClient {
         let right_target_posture: Posture = right_target_posture.into();
         wait_for_future(py, async move {
             client
-                .move_dual_hand_end_effector(&left_target_posture, &right_target_posture, time_millis)
+                .move_dual_hand_end_effector(
+                    &left_target_posture,
+                    &right_target_posture,
+                    time_millis,
+                )
                 .await
         })
         .map_err(to_py_err)
