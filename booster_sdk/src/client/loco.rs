@@ -372,6 +372,30 @@ impl BoosterClient {
         self.rpc.call_void(LocoApiId::ExitWbcGait, "").await
     }
 
+    /// Move both hand end-effectors to target postures simultaneously.
+    pub async fn move_dual_hand_end_effector(
+        &self,
+        left_target_posture: &crate::types::Posture,
+        right_target_posture: &crate::types::Posture,
+        time_millis: i32,
+    ) -> Result<()> {
+        let param = json!({
+            "left_target_posture": left_target_posture,
+            "right_target_posture": right_target_posture,
+            "time_millis": time_millis,
+        })
+        .to_string();
+        self.rpc
+            .call_void(LocoApiId::MoveDualHandEndEffector, param)
+            .await
+    }
+
+    /// Start or stop a visual kick (side-foot kick).
+    pub async fn visual_kick(&self, start: bool) -> Result<()> {
+        let param = json!({ "start": start }).to_string();
+        self.rpc.call_void(LocoApiId::VisualKick, param).await
+    }
+
     /// Publish a raw gripper control topic message.
     pub fn publish_gripper(&self, control: GripperControl) -> Result<()> {
         self.gripper_publisher.write(control)
