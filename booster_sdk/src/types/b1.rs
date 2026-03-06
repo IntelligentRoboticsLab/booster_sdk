@@ -41,6 +41,8 @@ crate::api_id_enum! {
         UnloadCustomTrainedTraj = 2034,
         EnterWbcGait = 2035,
         ExitWbcGait = 2036,
+        MoveDualHandEndEffector = 2037,
+        VisualKick = 2038,
     }
 }
 
