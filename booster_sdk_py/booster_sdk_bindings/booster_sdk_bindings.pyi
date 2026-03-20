@@ -1047,6 +1047,19 @@ class BoosterClient:
         """Exit WBC gait mode."""
         ...
 
+    def move_dual_hand_end_effector(
+        self,
+        left_target_posture: Posture,
+        right_target_posture: Posture,
+        time_millis: int,
+    ) -> None:
+        """Move both hand end-effectors to target postures simultaneously."""
+        ...
+
+    def visual_kick(self, start: bool) -> None:
+        """Start or stop a visual kick (side-foot kick)."""
+        ...
+
     def publish_gripper_command(self, command: GripperCommand) -> None:
         """Publish low-level gripper command message."""
         ...

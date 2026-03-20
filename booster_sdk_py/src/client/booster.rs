@@ -1626,6 +1626,33 @@ impl PyBoosterClient {
         wait_for_future(py, async move { client.exit_wbc_gait().await }).map_err(to_py_err)
     }
 
+    fn move_dual_hand_end_effector(
+        &self,
+        py: Python<'_>,
+        left_target_posture: PyPosture,
+        right_target_posture: PyPosture,
+        time_millis: i32,
+    ) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        let left_target_posture: Posture = left_target_posture.into();
+        let right_target_posture: Posture = right_target_posture.into();
+        wait_for_future(py, async move {
+            client
+                .move_dual_hand_end_effector(
+                    &left_target_posture,
+                    &right_target_posture,
+                    time_millis,
+                )
+                .await
+        })
+        .map_err(to_py_err)
+    }
+
+    fn visual_kick(&self, py: Python<'_>, start: bool) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.visual_kick(start).await }).map_err(to_py_err)
+    }
+
     fn publish_gripper_command(&self, command: PyGripperCommand) -> PyResult<()> {
         let command: GripperCommand = command.into();
         self.client
