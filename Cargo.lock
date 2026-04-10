@@ -1101,9 +1101,8 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "rustdds"
-version = "0.11.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54aa8af0cee7a6cad5a1fb81ae338ee5ffe5e41d26fc02d8798ce4a071fa4ac6"
+version = "0.11.9"
+source = "git+https://github.com/oxkitsune/RustDDS.git?branch=gijs%2Flocalhost-only#bc1742a38f3fb8a331376978a60d35cad1d8b915"
 dependencies = [
  "bit-vec",
  "byteorder",

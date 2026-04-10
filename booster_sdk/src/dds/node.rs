@@ -3,7 +3,7 @@
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::mpsc;
 
-use rustdds::{DomainParticipant, Publisher, QosPolicyBuilder, Subscriber};
+use rustdds::{DomainParticipant, DomainParticipantBuilder, Publisher, QosPolicyBuilder, Subscriber};
 
 use crate::types::{DdsError, Result};
 
@@ -12,6 +12,9 @@ use super::topics::TopicSpec;
 #[derive(Default, Debug, Clone)]
 pub struct DdsConfig {
     pub domain_id: u16,
+    /// If set, restricts DDS discovery and traffic to the named network interfaces only
+    /// (e.g. `vec!["eth0".into()]`). When `None`, all multicast-capable interfaces are used.
+    pub only_networks: Option<Vec<String>>,
 }
 
 #[derive(Clone)]
@@ -23,7 +26,18 @@ pub struct DdsNode {
 
 impl DdsNode {
     pub fn new(config: DdsConfig) -> Result<Self> {
-        let participant = DomainParticipant::new(config.domain_id)
+        let loopback = if cfg!(target_os = "macos") {
+            "lo0"
+        } else {
+            "lo"
+        };
+        let mut builder =
+            DomainParticipantBuilder::new(config.domain_id).with_only_networks(vec![loopback.into()]);
+        if let Some(networks) = config.only_networks {
+            builder = builder.with_only_networks(networks);
+        }
+        let participant = builder
+            .build()
             .map_err(|err| DdsError::InitializationFailed(err.to_string()))?;
         let qos = QosPolicyBuilder::new().build();
         let publisher = participant
