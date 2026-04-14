@@ -1,9 +1,12 @@
 //! DDS runtime helpers for creating publishers and subscriptions.
 
 use serde::{Serialize, de::DeserializeOwned};
+use std::net::{IpAddr, Ipv4Addr};
 use tokio::sync::mpsc;
 
-use rustdds::{DomainParticipant, Publisher, QosPolicyBuilder, Subscriber};
+use rustdds::{
+    DomainParticipant, DomainParticipantBuilder, Publisher, QosPolicyBuilder, Subscriber,
+};
 
 use crate::types::{DdsError, Result};
 
@@ -23,7 +26,10 @@ pub struct DdsNode {
 
 impl DdsNode {
     pub fn new(config: DdsConfig) -> Result<Self> {
-        let participant = DomainParticipant::new(config.domain_id)
+        let builder = DomainParticipantBuilder::new(config.domain_id)
+            .with_only_networks([IpAddr::V4(Ipv4Addr::LOCALHOST)]);
+        let participant = builder
+            .build()
             .map_err(|err| DdsError::InitializationFailed(err.to_string()))?;
         let qos = QosPolicyBuilder::new().build();
         let publisher = participant
