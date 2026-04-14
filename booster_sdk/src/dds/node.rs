@@ -15,8 +15,6 @@ use super::topics::TopicSpec;
 #[derive(Default, Debug, Clone)]
 pub struct DdsConfig {
     pub domain_id: u16,
-    /// Reserved for compatibility. DDS traffic is currently hardcoded to `127.0.0.1`.
-    pub only_networks: Option<Vec<String>>,
 }
 
 #[derive(Clone)]

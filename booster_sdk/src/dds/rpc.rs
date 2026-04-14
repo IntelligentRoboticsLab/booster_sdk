@@ -21,7 +21,6 @@ pub struct RpcClientOptions {
     pub default_timeout: Duration,
     pub startup_wait: Duration,
     pub service_topic: String,
-    pub only_networks: Option<Vec<String>>,
 }
 
 impl Default for RpcClientOptions {
@@ -34,7 +33,6 @@ impl Default for RpcClientOptions {
             // Wait once before the first RPC call so endpoint discovery can settle.
             startup_wait: Duration::from_millis(3000),
             service_topic: LOCO_API_TOPIC.to_owned(),
-            only_networks: None,
         }
     }
 }
@@ -148,7 +146,6 @@ impl RpcClient {
     pub fn new(options: RpcClientOptions) -> Result<Self> {
         let node = DdsNode::new(super::DdsConfig {
             domain_id: options.domain_id,
-            only_networks: options.only_networks.clone(),
         })?;
 
         let service_topic = normalize_service_topic(&options.service_topic);
