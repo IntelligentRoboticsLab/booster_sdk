@@ -1,9 +1,12 @@
 //! DDS runtime helpers for creating publishers and subscriptions.
 
 use serde::{Serialize, de::DeserializeOwned};
+use std::net::{IpAddr, Ipv4Addr};
 use tokio::sync::mpsc;
 
-use rustdds::{DomainParticipant, DomainParticipantBuilder, Publisher, QosPolicyBuilder, Subscriber};
+use rustdds::{
+    DomainParticipant, DomainParticipantBuilder, Publisher, QosPolicyBuilder, Subscriber,
+};
 
 use crate::types::{DdsError, Result};
 
@@ -12,8 +15,7 @@ use super::topics::TopicSpec;
 #[derive(Default, Debug, Clone)]
 pub struct DdsConfig {
     pub domain_id: u16,
-    /// If set, restricts DDS discovery and traffic to the named network interfaces only
-    /// (e.g. `vec!["eth0".into()]`). When `None`, all multicast-capable interfaces are used.
+    /// Reserved for compatibility. DDS traffic is currently hardcoded to `127.0.0.1`.
     pub only_networks: Option<Vec<String>>,
 }
 
@@ -26,16 +28,8 @@ pub struct DdsNode {
 
 impl DdsNode {
     pub fn new(config: DdsConfig) -> Result<Self> {
-        let loopback = if cfg!(target_os = "macos") {
-            "lo0"
-        } else {
-            "lo"
-        };
-        let mut builder =
-            DomainParticipantBuilder::new(config.domain_id).with_only_networks(vec![loopback.into()]);
-        if let Some(networks) = config.only_networks {
-            builder = builder.with_only_networks(networks);
-        }
+        let builder = DomainParticipantBuilder::new(config.domain_id)
+            .with_only_networks([IpAddr::V4(Ipv4Addr::LOCALHOST)]);
         let participant = builder
             .build()
             .map_err(|err| DdsError::InitializationFailed(err.to_string()))?;
