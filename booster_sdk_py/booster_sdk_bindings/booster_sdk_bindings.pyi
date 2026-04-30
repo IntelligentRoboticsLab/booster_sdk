@@ -1104,7 +1104,7 @@ class BoosterClient:
         ...
 
     def visual_kick(self, start: bool) -> None:
-        """Start or stop a visual kick (side-foot kick)."""
+        """Start or stop a visual kick (side-foot kick) using v1.6 V2 behavior."""
         ...
 
     def visual_kick_with_version(self, start: bool, version: VisualKickVersion) -> None:

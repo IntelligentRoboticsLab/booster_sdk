@@ -402,7 +402,7 @@ impl BoosterClient {
 
     /// Start or stop a visual kick (side-foot kick).
     pub async fn visual_kick(&self, start: bool) -> Result<()> {
-        self.visual_kick_with_version(start, VisualKickVersion::V1)
+        self.visual_kick_with_version(start, VisualKickVersion::V2)
             .await
     }
 
