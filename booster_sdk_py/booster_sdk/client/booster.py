@@ -16,6 +16,8 @@ GripperControlMode = bindings.GripperControlMode
 BoosterHandType = bindings.BoosterHandType
 DanceId = bindings.DanceId
 WholeBodyDanceId = bindings.WholeBodyDanceId
+VisualKickVersion = bindings.VisualKickVersion
+GaitType = bindings.GaitType
 JointOrder = bindings.JointOrder
 BodyControl = bindings.BodyControl
 Action = bindings.Action
@@ -47,6 +49,8 @@ __all__ = [
     "BoosterHandType",
     "DanceId",
     "WholeBodyDanceId",
+    "VisualKickVersion",
+    "GaitType",
     "JointOrder",
     "BodyControl",
     "Action",

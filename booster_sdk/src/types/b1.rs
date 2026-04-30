@@ -43,6 +43,19 @@ crate::api_id_enum! {
         ExitWbcGait = 2036,
         MoveDualHandEndEffector = 2037,
         VisualKick = 2038,
+        LionDancePrepare = 2039,
+        LionDanceStart = 2040,
+        LionDanceMove = 2041,
+        SwitchGait = 2042,
+    }
+}
+
+crate::api_id_enum! {
+    /// B1 v1.6 gait selectors.
+    GaitType {
+        WholeBodyHumanlikeGait = 0,
+        HalfBodyHumanlikeGait = 1,
+        HalfBodyHumanlikeGaitV2 = 2,
     }
 }
 
@@ -140,9 +153,19 @@ crate::api_id_enum! {
         MichaelDance1 = 1,
         MichaelDance2 = 2,
         MichaelDance3 = 3,
-        MoonWalk = 4,
         BoxingStyleKick = 5,
         RoundhouseKick = 6,
+        ShanHeGuRenDance = 7,
+        GaiGeChunFengDance = 8,
+        MichaelDance1And2 = 9,
+    }
+}
+
+crate::api_id_enum! {
+    /// Visual kick behavior version.
+    VisualKickVersion {
+        V1 = 0,
+        V2 = 1,
     }
 }
 
@@ -272,6 +295,10 @@ pub struct GetRobotInfoResponse {
     pub version: String,
     pub model: String,
     pub serial_number: String,
+    #[serde(default)]
+    pub edition: String,
+    #[serde(default)]
+    pub region: String,
 }
 
 /// Model parameters used by custom trajectories.
