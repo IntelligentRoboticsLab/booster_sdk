@@ -4,10 +4,10 @@ use booster_sdk::{
     client::loco::{BoosterClient, GripperCommand},
     types::{
         Action, BodyControl, BoosterHandType, CustomModel, CustomModelParams, CustomTrainedTraj,
-        DanceId, DexterousFingerParameter, Frame, GetModeResponse, GetRobotInfoResponse,
+        DanceId, DexterousFingerParameter, Frame, GaitType, GetModeResponse, GetRobotInfoResponse,
         GetStatusResponse, GripperControlMode, GripperMode, GripperMotionParameter, Hand,
         HandAction, JointOrder, LoadCustomTrainedTrajResponse, Orientation, Position, Posture,
-        Quaternion, RobotMode, Transform, WholeBodyDanceId,
+        Quaternion, RobotMode, Transform, VisualKickVersion, WholeBodyDanceId,
     },
 };
 use pyo3::{Bound, prelude::*, types::PyModule};
@@ -328,11 +328,15 @@ impl PyWholeBodyDanceId {
     #[classattr]
     const MICHAEL_DANCE_3: Self = Self(WholeBodyDanceId::MichaelDance3);
     #[classattr]
-    const MOON_WALK: Self = Self(WholeBodyDanceId::MoonWalk);
-    #[classattr]
     const BOXING_STYLE_KICK: Self = Self(WholeBodyDanceId::BoxingStyleKick);
     #[classattr]
     const ROUNDHOUSE_KICK: Self = Self(WholeBodyDanceId::RoundhouseKick);
+    #[classattr]
+    const SHAN_HE_GU_REN_DANCE: Self = Self(WholeBodyDanceId::ShanHeGuRenDance);
+    #[classattr]
+    const GAI_GE_CHUN_FENG_DANCE: Self = Self(WholeBodyDanceId::GaiGeChunFengDance);
+    #[classattr]
+    const MICHAEL_DANCE_1_AND_2: Self = Self(WholeBodyDanceId::MichaelDance1And2);
 
     fn __repr__(&self) -> String {
         match self.0 {
@@ -340,9 +344,17 @@ impl PyWholeBodyDanceId {
             WholeBodyDanceId::MichaelDance1 => "WholeBodyDanceId.MICHAEL_DANCE_1".to_string(),
             WholeBodyDanceId::MichaelDance2 => "WholeBodyDanceId.MICHAEL_DANCE_2".to_string(),
             WholeBodyDanceId::MichaelDance3 => "WholeBodyDanceId.MICHAEL_DANCE_3".to_string(),
-            WholeBodyDanceId::MoonWalk => "WholeBodyDanceId.MOON_WALK".to_string(),
             WholeBodyDanceId::BoxingStyleKick => "WholeBodyDanceId.BOXING_STYLE_KICK".to_string(),
             WholeBodyDanceId::RoundhouseKick => "WholeBodyDanceId.ROUNDHOUSE_KICK".to_string(),
+            WholeBodyDanceId::ShanHeGuRenDance => {
+                "WholeBodyDanceId.SHAN_HE_GU_REN_DANCE".to_string()
+            }
+            WholeBodyDanceId::GaiGeChunFengDance => {
+                "WholeBodyDanceId.GAI_GE_CHUN_FENG_DANCE".to_string()
+            }
+            WholeBodyDanceId::MichaelDance1And2 => {
+                "WholeBodyDanceId.MICHAEL_DANCE_1_AND_2".to_string()
+            }
         }
     }
 
@@ -353,6 +365,67 @@ impl PyWholeBodyDanceId {
 
 impl From<PyWholeBodyDanceId> for WholeBodyDanceId {
     fn from(value: PyWholeBodyDanceId) -> Self {
+        value.0
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "VisualKickVersion", eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PyVisualKickVersion(VisualKickVersion);
+
+#[pymethods]
+impl PyVisualKickVersion {
+    #[classattr]
+    const V1: Self = Self(VisualKickVersion::V1);
+    #[classattr]
+    const V2: Self = Self(VisualKickVersion::V2);
+
+    fn __repr__(&self) -> String {
+        match self.0 {
+            VisualKickVersion::V1 => "VisualKickVersion.V1".to_string(),
+            VisualKickVersion::V2 => "VisualKickVersion.V2".to_string(),
+        }
+    }
+
+    fn __int__(&self) -> i32 {
+        i32::from(self.0)
+    }
+}
+
+impl From<PyVisualKickVersion> for VisualKickVersion {
+    fn from(value: PyVisualKickVersion) -> Self {
+        value.0
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "GaitType", eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PyGaitType(GaitType);
+
+#[pymethods]
+impl PyGaitType {
+    #[classattr]
+    const WHOLE_BODY_HUMANLIKE_GAIT: Self = Self(GaitType::WholeBodyHumanlikeGait);
+    #[classattr]
+    const HALF_BODY_HUMANLIKE_GAIT: Self = Self(GaitType::HalfBodyHumanlikeGait);
+    #[classattr]
+    const HALF_BODY_HUMANLIKE_GAIT_V2: Self = Self(GaitType::HalfBodyHumanlikeGaitV2);
+
+    fn __repr__(&self) -> String {
+        match self.0 {
+            GaitType::WholeBodyHumanlikeGait => "GaitType.WHOLE_BODY_HUMANLIKE_GAIT".to_string(),
+            GaitType::HalfBodyHumanlikeGait => "GaitType.HALF_BODY_HUMANLIKE_GAIT".to_string(),
+            GaitType::HalfBodyHumanlikeGaitV2 => "GaitType.HALF_BODY_HUMANLIKE_GAIT_V2".to_string(),
+        }
+    }
+
+    fn __int__(&self) -> i32 {
+        i32::from(self.0)
+    }
+}
+
+impl From<PyGaitType> for GaitType {
+    fn from(value: PyGaitType) -> Self {
         value.0
     }
 }
@@ -1175,12 +1248,15 @@ pub struct PyGetRobotInfoResponse(GetRobotInfoResponse);
 #[pymethods]
 impl PyGetRobotInfoResponse {
     #[new]
+    #[pyo3(signature = (name, nickname, version, model, serial_number, edition=String::new(), region=String::new()))]
     fn new(
         name: String,
         nickname: String,
         version: String,
         model: String,
         serial_number: String,
+        edition: String,
+        region: String,
     ) -> Self {
         Self(GetRobotInfoResponse {
             name,
@@ -1188,6 +1264,8 @@ impl PyGetRobotInfoResponse {
             version,
             model,
             serial_number,
+            edition,
+            region,
         })
     }
 
@@ -1216,10 +1294,26 @@ impl PyGetRobotInfoResponse {
         self.0.serial_number.clone()
     }
 
+    #[getter]
+    fn edition(&self) -> String {
+        self.0.edition.clone()
+    }
+
+    #[getter]
+    fn region(&self) -> String {
+        self.0.region.clone()
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "GetRobotInfoResponse(name='{}', nickname='{}', version='{}', model='{}', serial_number='{}')",
-            self.0.name, self.0.nickname, self.0.version, self.0.model, self.0.serial_number
+            "GetRobotInfoResponse(name='{}', nickname='{}', version='{}', model='{}', serial_number='{}', edition='{}', region='{}')",
+            self.0.name,
+            self.0.nickname,
+            self.0.version,
+            self.0.model,
+            self.0.serial_number,
+            self.0.edition,
+            self.0.region
         )
     }
 }
@@ -1653,6 +1747,45 @@ impl PyBoosterClient {
         wait_for_future(py, async move { client.visual_kick(start).await }).map_err(to_py_err)
     }
 
+    fn visual_kick_with_version(
+        &self,
+        py: Python<'_>,
+        start: bool,
+        version: PyVisualKickVersion,
+    ) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move {
+            client.visual_kick_with_version(start, version.into()).await
+        })
+        .map_err(to_py_err)
+    }
+
+    fn lion_dance_prepare(&self, py: Python<'_>, start: bool) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.lion_dance_prepare(start).await })
+            .map_err(to_py_err)
+    }
+
+    fn lion_dance_start(&self, py: Python<'_>, dance_idx: i32) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.lion_dance_start(dance_idx).await })
+            .map_err(to_py_err)
+    }
+
+    fn lion_dance_move(&self, py: Python<'_>, start: bool) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.lion_dance_move(start).await }).map_err(to_py_err)
+    }
+
+    fn switch_gait(&self, py: Python<'_>, gait_type: PyGaitType) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(
+            py,
+            async move { client.switch_gait(gait_type.into()).await },
+        )
+        .map_err(to_py_err)
+    }
+
     fn publish_gripper_command(&self, command: PyGripperCommand) -> PyResult<()> {
         let command: GripperCommand = command.into();
         self.client
@@ -1689,6 +1822,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBoosterHandType>()?;
     m.add_class::<PyDanceId>()?;
     m.add_class::<PyWholeBodyDanceId>()?;
+    m.add_class::<PyVisualKickVersion>()?;
+    m.add_class::<PyGaitType>()?;
     m.add_class::<PyJointOrder>()?;
     m.add_class::<PyBodyControl>()?;
     m.add_class::<PyAction>()?;

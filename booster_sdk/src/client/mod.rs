@@ -1,6 +1,7 @@
 //! High-level client APIs for the Booster Robotics SDK.
 
 pub mod ai;
+pub mod audio;
 pub mod light_control;
 pub mod loco;
 pub mod vision;
@@ -105,7 +106,7 @@ macro_rules! api_id_enum {
         impl TryFrom<i32> for $name {
             type Error = &'static str;
 
-            fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
+            fn try_from(value: i32) -> std::result::Result<Self, &'static str> {
                 match value {
                     $(
                         $value => Ok(Self::$variant),

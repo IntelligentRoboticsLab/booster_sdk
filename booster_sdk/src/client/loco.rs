@@ -11,10 +11,10 @@ use crate::dds::{
     video_stream_topic,
 };
 use crate::types::{
-    BoosterHandType, CustomTrainedTraj, DanceId, DexterousFingerParameter, Frame, GetModeResponse,
-    GetRobotInfoResponse, GetStatusResponse, GripperControlMode, GripperMode,
+    BoosterHandType, CustomTrainedTraj, DanceId, DexterousFingerParameter, Frame, GaitType,
+    GetModeResponse, GetRobotInfoResponse, GetStatusResponse, GripperControlMode, GripperMode,
     GripperMotionParameter, Hand, HandAction, HandIndex, LoadCustomTrainedTrajResponse, LocoApiId,
-    Result, RobotMode, Transform, WholeBodyDanceId,
+    Result, RobotMode, Transform, VisualKickVersion, WholeBodyDanceId,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -390,10 +390,44 @@ impl BoosterClient {
             .await
     }
 
+    /// Start or stop a visual kick (side-foot kick) with an explicit behavior version.
+    pub async fn visual_kick_with_version(
+        &self,
+        start: bool,
+        version: VisualKickVersion,
+    ) -> Result<()> {
+        let param = json!({ "start": start, "version": i32::from(version) }).to_string();
+        self.rpc.call_void(LocoApiId::VisualKick, param).await
+    }
+
     /// Start or stop a visual kick (side-foot kick).
     pub async fn visual_kick(&self, start: bool) -> Result<()> {
+        self.visual_kick_with_version(start, VisualKickVersion::V2)
+            .await
+    }
+
+    /// Enter or exit the lion dance prepare posture.
+    pub async fn lion_dance_prepare(&self, start: bool) -> Result<()> {
         let param = json!({ "start": start }).to_string();
-        self.rpc.call_void(LocoApiId::VisualKick, param).await
+        self.rpc.call_void(LocoApiId::LionDancePrepare, param).await
+    }
+
+    /// Start a lion dance by numeric dance index.
+    pub async fn lion_dance_start(&self, dance_idx: i32) -> Result<()> {
+        let param = json!({ "dance_idx": dance_idx }).to_string();
+        self.rpc.call_void(LocoApiId::LionDanceStart, param).await
+    }
+
+    /// Start or stop lion dance movement synchronization.
+    pub async fn lion_dance_move(&self, start: bool) -> Result<()> {
+        let param = json!({ "start": start }).to_string();
+        self.rpc.call_void(LocoApiId::LionDanceMove, param).await
+    }
+
+    /// Switch robot gait type.
+    pub async fn switch_gait(&self, gait_type: GaitType) -> Result<()> {
+        let param = json!({ "gait_type": i32::from(gait_type) }).to_string();
+        self.rpc.call_void(LocoApiId::SwitchGait, param).await
     }
 
     /// Publish a raw gripper control topic message.

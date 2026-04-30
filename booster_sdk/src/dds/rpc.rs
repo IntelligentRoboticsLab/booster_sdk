@@ -15,7 +15,7 @@ use super::DdsNode;
 use super::messages::{RpcReqMsg, RpcRespMsg};
 use super::topics::{LOCO_API_TOPIC, rpc_request_topic, rpc_response_topic};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RpcClientOptions {
     pub domain_id: u16,
     pub default_timeout: Duration,
