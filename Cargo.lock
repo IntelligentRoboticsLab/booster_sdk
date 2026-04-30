@@ -1181,7 +1181,7 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 [[package]]
 name = "rustdds"
 version = "0.11.9"
-source = "git+https://github.com/oxkitsune/RustDDS.git?branch=gijs%2Flocalhost-only#55348faf7220d14985e225d4aab6554209f041c9"
+source = "git+https://github.com/Atostek/RustDDS.git?rev=20f787c#20f787c813367a2f4358c7c35c9096fc94a2595f"
 dependencies = [
  "bit-vec",
  "byteorder",
