@@ -2,13 +2,120 @@ use std::sync::Arc;
 
 use booster_sdk::client::audio::{
     AudioCaptureStreamInfo, AudioCaptureStreamOptions, AudioCaptureStreamState, AudioClient,
-    AudioSourceType, InitCaptureStreamResponse, InitPlayerResponse, InitRecorderResponse,
+    AudioDeviceBackendAffinity, AudioDeviceDirection, AudioDeviceInfo, AudioDeviceQueryType,
+    AudioDeviceTransport, AudioSourceType, BluetoothAudioProfile, BluetoothConnectOptions,
+    BluetoothConnectResult, BluetoothDeviceInfo, BluetoothDeviceState, BluetoothMajorClass,
+    BluetoothScanOptions, InitCaptureStreamResponse, InitPlayerResponse, InitRecorderResponse,
     PcmFormat, PlayerInfo, PlayerInitOptions, PlayerPriority, PlayerState, RecorderInfo,
     RecorderInitOptions, RecorderState,
 };
 use pyo3::{Bound, prelude::*, types::PyModule};
 
 use crate::{runtime::wait_for_future, startup_wait_from_seconds, to_py_err};
+
+macro_rules! py_int_enum {
+    ($py_name:ident, $public_name:literal, $inner:ty, { $($attr:ident => $variant:ident),+ $(,)? }) => {
+        #[pyclass(module = "booster_sdk_bindings", name = $public_name, eq)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        pub struct $py_name($inner);
+
+        #[pymethods]
+        impl $py_name {
+            $(
+                #[classattr]
+                const $attr: Self = Self(<$inner>::$variant);
+            )+
+
+            fn __int__(&self) -> i32 {
+                i32::from(self.0)
+            }
+        }
+
+        impl From<$py_name> for $inner {
+            fn from(value: $py_name) -> Self {
+                value.0
+            }
+        }
+
+        impl From<$inner> for $py_name {
+            fn from(value: $inner) -> Self {
+                Self(value)
+            }
+        }
+    };
+}
+
+py_int_enum!(
+    PyAudioDeviceQueryType,
+    "AudioDeviceQueryType",
+    AudioDeviceQueryType,
+    { INPUTS => Inputs, OUTPUTS => Outputs }
+);
+py_int_enum!(
+    PyAudioDeviceDirection,
+    "AudioDeviceDirection",
+    AudioDeviceDirection,
+    { INPUT => Input, OUTPUT => Output }
+);
+py_int_enum!(
+    PyAudioDeviceTransport,
+    "AudioDeviceTransport",
+    AudioDeviceTransport,
+    {
+        BUILTIN => Builtin,
+        USB => Usb,
+        BLUETOOTH => Bluetooth,
+        VIRTUAL => Virtual,
+        UNKNOWN => Unknown
+    }
+);
+py_int_enum!(
+    PyAudioDeviceBackendAffinity,
+    "AudioDeviceBackendAffinity",
+    AudioDeviceBackendAffinity,
+    {
+        PULSE => Pulse,
+        BOOSTER_AEC_ARRAY => BoosterAecArray,
+        ALSA_DIAGNOSTIC => AlsaDiagnostic
+    }
+);
+py_int_enum!(
+    PyBluetoothDeviceState,
+    "BluetoothDeviceState",
+    BluetoothDeviceState,
+    {
+        UNKNOWN => Unknown,
+        PAIRED => Paired,
+        CONNECTING => Connecting,
+        CONNECTED => Connected,
+        DISCONNECTING => Disconnecting,
+        FAILED => Failed
+    }
+);
+py_int_enum!(
+    PyBluetoothMajorClass,
+    "BluetoothMajorClass",
+    BluetoothMajorClass,
+    {
+        AUDIO => Audio,
+        PERIPHERAL => Peripheral,
+        PHONE => Phone,
+        COMPUTER => Computer,
+        OTHER => Other
+    }
+);
+py_int_enum!(
+    PyBluetoothAudioProfile,
+    "BluetoothAudioProfile",
+    BluetoothAudioProfile,
+    {
+        NONE => None,
+        A2DP_SINK => A2dpSink,
+        A2DP_SOURCE => A2dpSource,
+        HFP_HEADSET => HfpHeadset,
+        HFP_AG => HfpAg
+    }
+);
 
 #[pyclass(module = "booster_sdk_bindings", name = "AudioSourceType", eq)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -490,6 +597,252 @@ impl From<AudioCaptureStreamInfo> for PyAudioCaptureStreamInfo {
     }
 }
 
+#[pyclass(module = "booster_sdk_bindings", name = "AudioDeviceInfo")]
+#[derive(Clone)]
+pub struct PyAudioDeviceInfo(AudioDeviceInfo);
+
+#[pymethods]
+impl PyAudioDeviceInfo {
+    #[getter]
+    fn device_id(&self) -> String {
+        self.0.device_id.clone()
+    }
+    #[getter]
+    fn display_name(&self) -> String {
+        self.0.display_name.clone()
+    }
+    #[getter]
+    fn direction(&self) -> PyAudioDeviceDirection {
+        self.0.direction.into()
+    }
+    #[getter]
+    fn transport(&self) -> PyAudioDeviceTransport {
+        self.0.transport.into()
+    }
+    #[getter]
+    fn backend_affinity(&self) -> PyAudioDeviceBackendAffinity {
+        self.0.backend_affinity.into()
+    }
+    #[getter]
+    fn is_available(&self) -> bool {
+        self.0.is_available
+    }
+    #[getter]
+    fn is_system_default(&self) -> bool {
+        self.0.is_system_default
+    }
+    #[getter]
+    fn supports_input(&self) -> bool {
+        self.0.supports_input
+    }
+    #[getter]
+    fn supports_output(&self) -> bool {
+        self.0.supports_output
+    }
+    #[getter]
+    fn provider_name(&self) -> String {
+        self.0.provider_name.clone()
+    }
+    #[getter]
+    fn native_id(&self) -> String {
+        self.0.native_id.clone()
+    }
+    #[getter]
+    fn metadata_json(&self) -> String {
+        self.0.metadata_json.clone()
+    }
+}
+
+impl From<AudioDeviceInfo> for PyAudioDeviceInfo {
+    fn from(value: AudioDeviceInfo) -> Self {
+        Self(value)
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "BluetoothDeviceInfo")]
+#[derive(Clone)]
+pub struct PyBluetoothDeviceInfo(BluetoothDeviceInfo);
+
+#[pymethods]
+impl PyBluetoothDeviceInfo {
+    #[getter]
+    fn address(&self) -> String {
+        self.0.address.clone()
+    }
+    #[getter]
+    fn name(&self) -> String {
+        self.0.name.clone()
+    }
+    #[getter]
+    fn rssi(&self) -> i16 {
+        self.0.rssi
+    }
+    #[getter]
+    fn state(&self) -> PyBluetoothDeviceState {
+        self.0.state.into()
+    }
+    #[getter]
+    fn major_class(&self) -> PyBluetoothMajorClass {
+        self.0.major_class.into()
+    }
+    #[getter]
+    fn paired(&self) -> bool {
+        self.0.paired
+    }
+    #[getter]
+    fn trusted(&self) -> bool {
+        self.0.trusted
+    }
+    #[getter]
+    fn connected(&self) -> bool {
+        self.0.connected
+    }
+    #[getter]
+    fn is_audio_sink(&self) -> bool {
+        self.0.is_audio_sink
+    }
+    #[getter]
+    fn is_audio_source(&self) -> bool {
+        self.0.is_audio_source
+    }
+    #[getter]
+    fn is_hfp_capable(&self) -> bool {
+        self.0.is_hfp_capable
+    }
+    #[getter]
+    fn connected_profiles(&self) -> Vec<PyBluetoothAudioProfile> {
+        self.0
+            .connected_profiles
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect()
+    }
+    #[getter]
+    fn linked_pulse_sink_id(&self) -> String {
+        self.0.linked_pulse_sink_id.clone()
+    }
+    #[getter]
+    fn linked_pulse_source_id(&self) -> String {
+        self.0.linked_pulse_source_id.clone()
+    }
+    #[getter]
+    fn last_seen_ms(&self) -> i64 {
+        self.0.last_seen_ms
+    }
+}
+
+impl From<BluetoothDeviceInfo> for PyBluetoothDeviceInfo {
+    fn from(value: BluetoothDeviceInfo) -> Self {
+        Self(value)
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "BluetoothScanOptions")]
+#[derive(Clone, Copy)]
+pub struct PyBluetoothScanOptions(BluetoothScanOptions);
+
+#[pymethods]
+impl PyBluetoothScanOptions {
+    #[new]
+    #[pyo3(signature = (timeout_ms=30000, audio_only=true))]
+    fn new(timeout_ms: i32, audio_only: bool) -> Self {
+        Self(BluetoothScanOptions {
+            timeout_ms,
+            audio_only,
+        })
+    }
+}
+
+impl From<PyBluetoothScanOptions> for BluetoothScanOptions {
+    fn from(value: PyBluetoothScanOptions) -> Self {
+        value.0
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "BluetoothConnectOptions")]
+#[derive(Clone)]
+pub struct PyBluetoothConnectOptions(BluetoothConnectOptions);
+
+#[pymethods]
+impl PyBluetoothConnectOptions {
+    #[new]
+    #[pyo3(signature = (address, auto_pair=true, make_default=true, preferred_profile=None, timeout_ms=15000))]
+    fn new(
+        address: String,
+        auto_pair: bool,
+        make_default: bool,
+        preferred_profile: Option<PyBluetoothAudioProfile>,
+        timeout_ms: i32,
+    ) -> Self {
+        Self(BluetoothConnectOptions {
+            address,
+            auto_pair,
+            make_default,
+            preferred_profile: preferred_profile
+                .map(Into::into)
+                .unwrap_or(BluetoothAudioProfile::None),
+            timeout_ms,
+        })
+    }
+}
+
+impl From<PyBluetoothConnectOptions> for BluetoothConnectOptions {
+    fn from(value: PyBluetoothConnectOptions) -> Self {
+        value.0
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "BluetoothConnectResult")]
+#[derive(Clone)]
+pub struct PyBluetoothConnectResult(BluetoothConnectResult);
+
+#[pymethods]
+impl PyBluetoothConnectResult {
+    #[getter]
+    fn device(&self) -> PyBluetoothDeviceInfo {
+        self.0.device.clone().into()
+    }
+    #[getter]
+    fn pulse_sink_id(&self) -> String {
+        self.0.pulse_sink_id.clone()
+    }
+    #[getter]
+    fn pulse_source_id(&self) -> String {
+        self.0.pulse_source_id.clone()
+    }
+    #[getter]
+    fn active_profile(&self) -> PyBluetoothAudioProfile {
+        self.0.active_profile.into()
+    }
+    #[getter]
+    fn pulse_endpoint_ready(&self) -> bool {
+        self.0.pulse_endpoint_ready
+    }
+    #[getter]
+    fn default_sink_applied(&self) -> bool {
+        self.0.default_sink_applied
+    }
+    #[getter]
+    fn default_source_applied(&self) -> bool {
+        self.0.default_source_applied
+    }
+    #[getter]
+    fn default_route_error_code(&self) -> i32 {
+        self.0.default_route_error_code
+    }
+    #[getter]
+    fn default_route_error_msg(&self) -> String {
+        self.0.default_route_error_msg.clone()
+    }
+}
+
+impl From<BluetoothConnectResult> for PyBluetoothConnectResult {
+    fn from(value: BluetoothConnectResult) -> Self {
+        Self(value)
+    }
+}
+
 #[pyclass(module = "booster_sdk_bindings", name = "AudioClient", unsendable)]
 pub struct PyAudioClient {
     client: Arc<AudioClient>,
@@ -715,6 +1068,85 @@ impl PyAudioClient {
         .map(Into::into)
         .map_err(to_py_err)
     }
+
+    fn get_devices(
+        &self,
+        py: Python<'_>,
+        query_type: PyAudioDeviceQueryType,
+    ) -> PyResult<Vec<PyAudioDeviceInfo>> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(
+            py,
+            async move { client.get_devices(query_type.into()).await },
+        )
+        .map(|devices| devices.into_iter().map(Into::into).collect())
+        .map_err(to_py_err)
+    }
+
+    #[pyo3(signature = (options=None))]
+    fn start_bluetooth_scan(
+        &self,
+        py: Python<'_>,
+        options: Option<PyBluetoothScanOptions>,
+    ) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        let options: BluetoothScanOptions = options.map(Into::into).unwrap_or_default();
+        wait_for_future(
+            py,
+            async move { client.start_bluetooth_scan(&options).await },
+        )
+        .map_err(to_py_err)
+    }
+
+    fn stop_bluetooth_scan(&self, py: Python<'_>) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.stop_bluetooth_scan().await }).map_err(to_py_err)
+    }
+
+    #[pyo3(signature = (include_unpaired=true))]
+    fn get_bluetooth_devices(
+        &self,
+        py: Python<'_>,
+        include_unpaired: bool,
+    ) -> PyResult<Vec<PyBluetoothDeviceInfo>> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move {
+            client.get_bluetooth_devices(include_unpaired).await
+        })
+        .map(|devices| devices.into_iter().map(Into::into).collect())
+        .map_err(to_py_err)
+    }
+
+    fn connect_bluetooth_device(
+        &self,
+        py: Python<'_>,
+        options: PyBluetoothConnectOptions,
+    ) -> PyResult<PyBluetoothConnectResult> {
+        let client = Arc::clone(&self.client);
+        let options: BluetoothConnectOptions = options.into();
+        wait_for_future(py, async move {
+            client.connect_bluetooth_device(&options).await
+        })
+        .map(Into::into)
+        .map_err(to_py_err)
+    }
+
+    fn disconnect_bluetooth_device(&self, py: Python<'_>, address: String) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move {
+            client.disconnect_bluetooth_device(address).await
+        })
+        .map_err(to_py_err)
+    }
+
+    fn forget_bluetooth_device(&self, py: Python<'_>, address: String) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(
+            py,
+            async move { client.forget_bluetooth_device(address).await },
+        )
+        .map_err(to_py_err)
+    }
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -733,6 +1165,18 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPlayerInfo>()?;
     m.add_class::<PyRecorderInfo>()?;
     m.add_class::<PyAudioCaptureStreamInfo>()?;
+    m.add_class::<PyAudioDeviceQueryType>()?;
+    m.add_class::<PyAudioDeviceDirection>()?;
+    m.add_class::<PyAudioDeviceTransport>()?;
+    m.add_class::<PyAudioDeviceBackendAffinity>()?;
+    m.add_class::<PyBluetoothDeviceState>()?;
+    m.add_class::<PyBluetoothMajorClass>()?;
+    m.add_class::<PyBluetoothAudioProfile>()?;
+    m.add_class::<PyAudioDeviceInfo>()?;
+    m.add_class::<PyBluetoothDeviceInfo>()?;
+    m.add_class::<PyBluetoothScanOptions>()?;
+    m.add_class::<PyBluetoothConnectOptions>()?;
+    m.add_class::<PyBluetoothConnectResult>()?;
     m.add_class::<PyAudioClient>()?;
     Ok(())
 }

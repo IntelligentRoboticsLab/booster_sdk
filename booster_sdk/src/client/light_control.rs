@@ -12,6 +12,7 @@ crate::api_id_enum! {
     LightApiId {
         SetLedLightColor = 2000,
         StopLedLightControl = 2001,
+        SetLedLightColors = 2002,
     }
 }
 
@@ -21,6 +22,12 @@ pub struct SetLedLightColorParameter {
     pub r: u8,
     pub g: u8,
     pub b: u8,
+}
+
+/// Multi-pixel LED color payload introduced in SDK 1.7.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetLedLightColorsParameter {
+    pub colors: Vec<SetLedLightColorParameter>,
 }
 
 impl SetLedLightColorParameter {
@@ -77,10 +84,43 @@ impl LightControlClient {
             .await
     }
 
+    /// Set multiple LED pixel colors in one request.
+    pub async fn set_led_light_colors(&self, colors: &[SetLedLightColorParameter]) -> Result<()> {
+        self.rpc
+            .call_serialized(
+                LightApiId::SetLedLightColors,
+                &SetLedLightColorsParameter {
+                    colors: colors.to_vec(),
+                },
+            )
+            .await
+    }
+
     /// Stop LED light control.
     pub async fn stop_led_light_control(&self) -> Result<()> {
         self.rpc
             .call_void(LightApiId::StopLedLightControl, "")
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn serializes_sdk_1_7_multi_pixel_payload() {
+        let payload = SetLedLightColorsParameter {
+            colors: vec![
+                SetLedLightColorParameter { r: 255, g: 0, b: 1 },
+                SetLedLightColorParameter { r: 2, g: 3, b: 4 },
+            ],
+        };
+        assert_eq!(
+            serde_json::to_value(payload).unwrap(),
+            json!({"colors": [{"r": 255, "g": 0, "b": 1}, {"r": 2, "g": 3, "b": 4}]})
+        );
+        assert_eq!(i32::from(LightApiId::SetLedLightColors), 2002);
     }
 }

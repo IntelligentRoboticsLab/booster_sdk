@@ -1,4 +1,4 @@
-//! Audio service RPC client for Booster SDK v1.6.
+//! Audio service RPC client for Booster SDK v1.7.
 
 use std::{
     collections::HashMap,
@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value, json};
 
 use crate::{
-    dds::{RpcClient, RpcClientOptions},
+    dds::{
+        BluetoothEvent, DdsSubscription, RpcClient, RpcClientOptions, audio_bluetooth_event_topic,
+    },
     types::{Result, RpcError},
 };
 
@@ -48,6 +50,13 @@ enum AudioServiceMethod {
     StopCaptureStream,
     DestroyCaptureStream,
     GetCaptureStreamInfo,
+    GetDevices,
+    StartBluetoothScan,
+    StopBluetoothScan,
+    GetBluetoothDevices,
+    ConnectBluetoothDevice,
+    DisconnectBluetoothDevice,
+    ForgetBluetoothDevice,
 }
 
 impl AudioServiceMethod {
@@ -80,6 +89,13 @@ impl AudioServiceMethod {
             Self::StopCaptureStream => "rt/booster/audio/stop_capture_stream",
             Self::DestroyCaptureStream => "rt/booster/audio/destroy_capture_stream",
             Self::GetCaptureStreamInfo => "rt/booster/audio/get_capture_stream_info",
+            Self::GetDevices => "rt/booster/audio/get_devices",
+            Self::StartBluetoothScan => "rt/booster/audio/start_bluetooth_scan",
+            Self::StopBluetoothScan => "rt/booster/audio/stop_bluetooth_scan",
+            Self::GetBluetoothDevices => "rt/booster/audio/get_bluetooth_devices",
+            Self::ConnectBluetoothDevice => "rt/booster/audio/connect_bluetooth_device",
+            Self::DisconnectBluetoothDevice => "rt/booster/audio/disconnect_bluetooth_device",
+            Self::ForgetBluetoothDevice => "rt/booster/audio/forget_bluetooth_device",
         }
     }
 }
@@ -91,6 +107,84 @@ crate::api_id_enum! {
         WavFile = 1,
         PcmStream = 2,
         Mp3File = 3,
+    }
+}
+
+crate::api_id_enum! {
+    /// Direction used when querying audio devices.
+    AudioDeviceQueryType {
+        Inputs = 0,
+        Outputs = 1,
+    }
+}
+
+crate::api_id_enum! {
+    /// Audio device direction.
+    AudioDeviceDirection {
+        Input = 0,
+        Output = 1,
+    }
+}
+
+crate::api_id_enum! {
+    /// Audio device transport.
+    AudioDeviceTransport {
+        Builtin = 0,
+        Usb = 1,
+        Bluetooth = 2,
+        Virtual = 3,
+        Unknown = 4,
+    }
+}
+
+crate::api_id_enum! {
+    /// Backend responsible for an audio device.
+    AudioDeviceBackendAffinity {
+        Pulse = 0,
+        BoosterAecArray = 1,
+        AlsaDiagnostic = 2,
+    }
+}
+
+crate::api_id_enum! {
+    /// Bluetooth scanning state.
+    BluetoothScanState {
+        Idle = 0,
+        Scanning = 1,
+    }
+}
+
+crate::api_id_enum! {
+    /// Bluetooth device connection state.
+    BluetoothDeviceState {
+        Unknown = 0,
+        Paired = 1,
+        Connecting = 2,
+        Connected = 3,
+        Disconnecting = 4,
+        Failed = 5,
+    }
+}
+
+crate::api_id_enum! {
+    /// Bluetooth major device class.
+    BluetoothMajorClass {
+        Audio = 0,
+        Peripheral = 1,
+        Phone = 2,
+        Computer = 3,
+        Other = 4,
+    }
+}
+
+crate::api_id_enum! {
+    /// Bluetooth audio profile.
+    BluetoothAudioProfile {
+        None = 0,
+        A2dpSink = 1,
+        A2dpSource = 2,
+        HfpHeadset = 3,
+        HfpAg = 4,
     }
 }
 
@@ -285,6 +379,118 @@ pub struct AudioCaptureStreamInfo {
     pub dropped_frames: i64,
 }
 
+/// Audio input or output device descriptor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioDeviceInfo {
+    pub device_id: String,
+    pub display_name: String,
+    pub direction: AudioDeviceDirection,
+    pub transport: AudioDeviceTransport,
+    pub backend_affinity: AudioDeviceBackendAffinity,
+    pub is_available: bool,
+    pub is_system_default: bool,
+    pub supports_input: bool,
+    pub supports_output: bool,
+    #[serde(default)]
+    pub provider_name: String,
+    #[serde(default)]
+    pub native_id: String,
+    #[serde(default)]
+    pub metadata_json: String,
+}
+
+/// Bluetooth device descriptor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BluetoothDeviceInfo {
+    pub address: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub rssi: i16,
+    pub state: BluetoothDeviceState,
+    pub major_class: BluetoothMajorClass,
+    #[serde(default)]
+    pub paired: bool,
+    #[serde(default)]
+    pub trusted: bool,
+    #[serde(default)]
+    pub connected: bool,
+    #[serde(default)]
+    pub is_audio_sink: bool,
+    #[serde(default)]
+    pub is_audio_source: bool,
+    #[serde(default)]
+    pub is_hfp_capable: bool,
+    #[serde(default)]
+    pub connected_profiles: Vec<BluetoothAudioProfile>,
+    #[serde(default)]
+    pub linked_pulse_sink_id: String,
+    #[serde(default)]
+    pub linked_pulse_source_id: String,
+    #[serde(default)]
+    pub last_seen_ms: i64,
+}
+
+/// Options for Bluetooth discovery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BluetoothScanOptions {
+    pub timeout_ms: i32,
+    pub audio_only: bool,
+}
+
+impl Default for BluetoothScanOptions {
+    fn default() -> Self {
+        Self {
+            timeout_ms: 30_000,
+            audio_only: true,
+        }
+    }
+}
+
+/// Options for connecting a Bluetooth audio device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BluetoothConnectOptions {
+    pub address: String,
+    pub auto_pair: bool,
+    pub make_default: bool,
+    pub preferred_profile: BluetoothAudioProfile,
+    pub timeout_ms: i32,
+}
+
+impl BluetoothConnectOptions {
+    #[must_use]
+    pub fn new(address: impl Into<String>) -> Self {
+        Self {
+            address: address.into(),
+            auto_pair: true,
+            make_default: true,
+            preferred_profile: BluetoothAudioProfile::None,
+            timeout_ms: 15_000,
+        }
+    }
+}
+
+/// Result returned after connecting a Bluetooth audio device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BluetoothConnectResult {
+    pub device: BluetoothDeviceInfo,
+    #[serde(default)]
+    pub pulse_sink_id: String,
+    #[serde(default)]
+    pub pulse_source_id: String,
+    pub active_profile: BluetoothAudioProfile,
+    #[serde(default)]
+    pub pulse_endpoint_ready: bool,
+    #[serde(default)]
+    pub default_sink_applied: bool,
+    #[serde(default)]
+    pub default_source_applied: bool,
+    #[serde(default)]
+    pub default_route_error_code: i32,
+    #[serde(default)]
+    pub default_route_error_msg: String,
+}
+
 impl AudioCaptureStreamInfo {
     #[must_use]
     pub fn state_enum(&self) -> Option<AudioCaptureStreamState> {
@@ -458,6 +664,37 @@ impl AudioClient {
         object.insert("client_id".to_owned(), Value::String(client_id));
         object.insert("request_id".to_owned(), Value::String(request_id));
         self.call_raw(method, Value::Object(object)).await
+    }
+
+    async fn call_service_with_timeout<R>(
+        &self,
+        method: AudioServiceMethod,
+        request: Value,
+        timeout: Duration,
+    ) -> Result<R>
+    where
+        R: DeserializeOwned + Send + 'static,
+    {
+        let client_id = self.ensure_registered().await?;
+        let request_id = self.next_request_id();
+        let mut object = match request {
+            Value::Object(object) => object,
+            Value::Null => Map::new(),
+            other => {
+                let mut object = Map::new();
+                object.insert("value".to_owned(), other);
+                object
+            }
+        };
+        object.insert("client_id".to_owned(), Value::String(client_id));
+        object.insert("request_id".to_owned(), Value::String(request_id));
+        self.rpc_client(method)?
+            .call_with_body(
+                AUDIO_RPC_API_ID,
+                Value::Object(object).to_string(),
+                Some(timeout),
+            )
+            .await
     }
 
     async fn call_result(&self, method: AudioServiceMethod, request: Value) -> Result<()> {
@@ -727,5 +964,156 @@ impl AudioClient {
             .await?;
         ensure_ret_code(response.ret_code, response.ret_msg)?;
         Ok(response.info)
+    }
+
+    /// Query available input or output devices.
+    pub async fn get_devices(
+        &self,
+        query_type: AudioDeviceQueryType,
+    ) -> Result<Vec<AudioDeviceInfo>> {
+        #[derive(Deserialize)]
+        struct Response {
+            ret_code: i32,
+            #[serde(default)]
+            ret_msg: String,
+            #[serde(default)]
+            devices: Vec<AudioDeviceInfo>,
+        }
+
+        let response: Response = self
+            .call_service(
+                AudioServiceMethod::GetDevices,
+                json!({ "query_type": i32::from(query_type) }),
+            )
+            .await?;
+        ensure_ret_code(response.ret_code, response.ret_msg)?;
+        Ok(response.devices)
+    }
+
+    /// Start Bluetooth device discovery.
+    pub async fn start_bluetooth_scan(&self, options: &BluetoothScanOptions) -> Result<()> {
+        self.call_result(
+            AudioServiceMethod::StartBluetoothScan,
+            serialize_request(options)?,
+        )
+        .await
+    }
+
+    /// Stop Bluetooth device discovery.
+    pub async fn stop_bluetooth_scan(&self) -> Result<()> {
+        self.call_result(AudioServiceMethod::StopBluetoothScan, Value::Null)
+            .await
+    }
+
+    /// List Bluetooth devices known to the audio service.
+    pub async fn get_bluetooth_devices(
+        &self,
+        include_unpaired: bool,
+    ) -> Result<Vec<BluetoothDeviceInfo>> {
+        #[derive(Deserialize)]
+        struct Response {
+            ret_code: i32,
+            #[serde(default)]
+            ret_msg: String,
+            #[serde(default)]
+            devices: Vec<BluetoothDeviceInfo>,
+        }
+
+        let response: Response = self
+            .call_service(
+                AudioServiceMethod::GetBluetoothDevices,
+                json!({ "include_unpaired": include_unpaired }),
+            )
+            .await?;
+        ensure_ret_code(response.ret_code, response.ret_msg)?;
+        Ok(response.devices)
+    }
+
+    /// Connect and optionally route audio through a Bluetooth device.
+    pub async fn connect_bluetooth_device(
+        &self,
+        options: &BluetoothConnectOptions,
+    ) -> Result<BluetoothConnectResult> {
+        #[derive(Deserialize)]
+        struct Response {
+            ret_code: i32,
+            #[serde(default)]
+            ret_msg: String,
+            #[serde(flatten)]
+            result: BluetoothConnectResult,
+        }
+
+        let timeout_ms = options.timeout_ms.max(0) as u64 + 2_000;
+        let response: Response = self
+            .call_service_with_timeout(
+                AudioServiceMethod::ConnectBluetoothDevice,
+                serialize_request(options)?,
+                Duration::from_millis(timeout_ms),
+            )
+            .await?;
+        ensure_ret_code(response.ret_code, response.ret_msg)?;
+        Ok(response.result)
+    }
+
+    /// Disconnect a Bluetooth device by address.
+    pub async fn disconnect_bluetooth_device(&self, address: impl Into<String>) -> Result<()> {
+        self.call_result(
+            AudioServiceMethod::DisconnectBluetoothDevice,
+            json!({ "address": address.into() }),
+        )
+        .await
+    }
+
+    /// Remove a paired Bluetooth device from the robot.
+    pub async fn forget_bluetooth_device(&self, address: impl Into<String>) -> Result<()> {
+        self.call_result(
+            AudioServiceMethod::ForgetBluetoothDevice,
+            json!({ "address": address.into() }),
+        )
+        .await
+    }
+
+    /// Subscribe to Bluetooth lifecycle events.
+    pub fn subscribe_bluetooth_events(&self) -> Result<DdsSubscription<BluetoothEvent>> {
+        self.rpc_client(AudioServiceMethod::RegisterClient)?
+            .node()
+            .subscribe(&audio_bluetooth_event_topic(), 16)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn bluetooth_options_match_wire_schema() {
+        let options = BluetoothConnectOptions::new("AA:BB:CC:DD:EE:FF");
+        assert_eq!(
+            serde_json::to_value(options).unwrap(),
+            json!({
+                "address": "AA:BB:CC:DD:EE:FF",
+                "auto_pair": true,
+                "make_default": true,
+                "preferred_profile": 0,
+                "timeout_ms": 15000
+            })
+        );
+    }
+
+    #[test]
+    fn sdk_1_7_audio_topics_match_installed_service() {
+        assert_eq!(
+            AudioServiceMethod::GetDevices.topic(),
+            "rt/booster/audio/get_devices"
+        );
+        assert_eq!(
+            AudioServiceMethod::ConnectBluetoothDevice.topic(),
+            "rt/booster/audio/connect_bluetooth_device"
+        );
+        assert_eq!(
+            AudioServiceMethod::ForgetBluetoothDevice.topic(),
+            "rt/booster/audio/forget_bluetooth_device"
+        );
     }
 }

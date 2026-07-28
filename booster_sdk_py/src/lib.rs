@@ -35,6 +35,12 @@ pub(crate) fn startup_wait_from_seconds(
     Ok(Some(Duration::from_secs_f64(seconds)))
 }
 
+pub(crate) fn json_value_to_py(py: Python<'_>, value: &serde_json::Value) -> PyResult<Py<PyAny>> {
+    PyModule::import(py, "json")?
+        .call_method1("loads", (value.to_string(),))
+        .map(Bound::unbind)
+}
+
 fn rpc_debug_enabled() -> bool {
     std::env::var("BOOSTER_RPC_DEBUG")
         .map(|value| {

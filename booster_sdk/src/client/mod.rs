@@ -2,6 +2,8 @@
 
 pub mod ai;
 pub mod audio;
+pub mod camera;
+pub mod handeye_calib;
 pub mod light_control;
 pub mod loco;
 pub mod vision;

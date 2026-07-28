@@ -4,15 +4,16 @@ use booster_sdk::{
     client::loco::{BoosterClient, GripperCommand},
     types::{
         Action, BodyControl, BoosterHandType, CustomModel, CustomModelParams, CustomTrainedTraj,
-        DanceId, DexterousFingerParameter, Frame, GaitType, GetModeResponse, GetRobotInfoResponse,
-        GetStatusResponse, GripperControlMode, GripperMode, GripperMotionParameter, Hand,
-        HandAction, JointOrder, LoadCustomTrainedTrajResponse, Orientation, Position, Posture,
-        Quaternion, RobotMode, Transform, VisualKickVersion, WholeBodyDanceId,
+        DanceId, DeviceInfo, DeviceInfoKind, DexterousFingerParameter, Frame, GaitType,
+        GetModeResponse, GetRobotInfoResponse, GetStatusResponse, GetUpVersion, GripperControlMode,
+        GripperMode, GripperMotionParameter, Hand, HandAction, JointOrder,
+        LoadCustomTrainedTrajResponse, Orientation, Position, Posture, Quaternion, RobotMode,
+        Transform, VisualKickVersion, WholeBodyDanceId,
     },
 };
 use pyo3::{Bound, prelude::*, types::PyModule};
 
-use crate::{runtime::wait_for_future, startup_wait_from_seconds, to_py_err};
+use crate::{json_value_to_py, runtime::wait_for_future, startup_wait_from_seconds, to_py_err};
 
 #[pyclass(module = "booster_sdk_bindings", name = "RobotMode", eq)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -410,12 +411,17 @@ impl PyGaitType {
     const HALF_BODY_HUMANLIKE_GAIT: Self = Self(GaitType::HalfBodyHumanlikeGait);
     #[classattr]
     const HALF_BODY_HUMANLIKE_GAIT_V2: Self = Self(GaitType::HalfBodyHumanlikeGaitV2);
+    #[classattr]
+    const WHOLE_BODY_HUMANLIKE_GAIT_V2: Self = Self(GaitType::WholeBodyHumanlikeGaitV2);
 
     fn __repr__(&self) -> String {
         match self.0 {
             GaitType::WholeBodyHumanlikeGait => "GaitType.WHOLE_BODY_HUMANLIKE_GAIT".to_string(),
             GaitType::HalfBodyHumanlikeGait => "GaitType.HALF_BODY_HUMANLIKE_GAIT".to_string(),
             GaitType::HalfBodyHumanlikeGaitV2 => "GaitType.HALF_BODY_HUMANLIKE_GAIT_V2".to_string(),
+            GaitType::WholeBodyHumanlikeGaitV2 => {
+                "GaitType.WHOLE_BODY_HUMANLIKE_GAIT_V2".to_string()
+            }
         }
     }
 
@@ -427,6 +433,81 @@ impl PyGaitType {
 impl From<PyGaitType> for GaitType {
     fn from(value: PyGaitType) -> Self {
         value.0
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "GetUpVersion", eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PyGetUpVersion(GetUpVersion);
+
+#[pymethods]
+impl PyGetUpVersion {
+    #[classattr]
+    const V1: Self = Self(GetUpVersion::V1);
+    #[classattr]
+    const V2: Self = Self(GetUpVersion::V2);
+
+    fn __int__(&self) -> i32 {
+        i32::from(self.0)
+    }
+}
+
+impl From<PyGetUpVersion> for GetUpVersion {
+    fn from(value: PyGetUpVersion) -> Self {
+        value.0
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "DeviceInfoKind", eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PyDeviceInfoKind(DeviceInfoKind);
+
+#[pymethods]
+impl PyDeviceInfoKind {
+    #[classattr]
+    const UNKNOWN: Self = Self(DeviceInfoKind::Unknown);
+    #[classattr]
+    const SENSORS: Self = Self(DeviceInfoKind::Sensors);
+    #[classattr]
+    const HANDS: Self = Self(DeviceInfoKind::Hands);
+    #[classattr]
+    const ROBOT_MODEL: Self = Self(DeviceInfoKind::RobotModel);
+    #[classattr]
+    const CAMERA: Self = Self(DeviceInfoKind::Camera);
+
+    fn __int__(&self) -> i32 {
+        i32::from(self.0)
+    }
+}
+
+#[pyclass(module = "booster_sdk_bindings", name = "DeviceInfo")]
+#[derive(Clone)]
+pub struct PyDeviceInfo(pub(crate) DeviceInfo);
+
+#[pymethods]
+impl PyDeviceInfo {
+    #[getter]
+    fn kind(&self) -> PyDeviceInfoKind {
+        PyDeviceInfoKind(self.0.kind)
+    }
+
+    #[getter]
+    fn body(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(py, &self.0.body)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DeviceInfo(kind={}, body={})",
+            i32::from(self.0.kind),
+            self.0.body
+        )
+    }
+}
+
+impl From<DeviceInfo> for PyDeviceInfo {
+    fn from(value: DeviceInfo) -> Self {
+        Self(value)
     }
 }
 
@@ -491,6 +572,10 @@ impl PyBodyControl {
     const GOALIE: Self = Self(BodyControl::Goalie);
     #[classattr]
     const WBC_GAIT: Self = Self(BodyControl::WbcGait);
+    #[classattr]
+    const LION_DANCE_PREPARE_POSE: Self = Self(BodyControl::LionDancePreparePose);
+    #[classattr]
+    const VISUAL_KICK_V1: Self = Self(BodyControl::VisualKickV1);
 
     fn __repr__(&self) -> String {
         match self.0 {
@@ -507,6 +592,8 @@ impl PyBodyControl {
             BodyControl::InsideFoot => "BodyControl.INSIDE_FOOT".to_string(),
             BodyControl::Goalie => "BodyControl.GOALIE".to_string(),
             BodyControl::WbcGait => "BodyControl.WBC_GAIT".to_string(),
+            BodyControl::LionDancePreparePose => "BodyControl.LION_DANCE_PREPARE_POSE".to_string(),
+            BodyControl::VisualKickV1 => "BodyControl.VISUAL_KICK_V1".to_string(),
         }
     }
 
@@ -1412,6 +1499,20 @@ impl PyBoosterClient {
         wait_for_future(py, async move { client.rotate_head(pitch, yaw).await }).map_err(to_py_err)
     }
 
+    fn rotate_head_with_time(
+        &self,
+        py: Python<'_>,
+        pitch: f32,
+        yaw: f32,
+        time_millis: i32,
+    ) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move {
+            client.rotate_head_with_time(pitch, yaw, time_millis).await
+        })
+        .map_err(to_py_err)
+    }
+
     fn wave_hand(&self, py: Python<'_>, action: PyHandAction) -> PyResult<()> {
         let client = Arc::clone(&self.client);
         wait_for_future(py, async move { client.wave_hand(action.into()).await }).map_err(to_py_err)
@@ -1437,18 +1538,58 @@ impl PyBoosterClient {
         wait_for_future(py, async move { client.lie_down().await }).map_err(to_py_err)
     }
 
-    fn get_up(&self, py: Python<'_>) -> PyResult<()> {
+    #[pyo3(signature = (version=None))]
+    fn get_up(&self, py: Python<'_>, version: Option<PyGetUpVersion>) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.get_up().await }).map_err(to_py_err)
+        wait_for_future(py, async move {
+            match version {
+                Some(version) => client.get_up_with_version(version.into()).await,
+                None => client.get_up().await,
+            }
+        })
+        .map_err(to_py_err)
     }
 
-    fn get_up_with_mode(&self, py: Python<'_>, mode: PyRobotMode) -> PyResult<()> {
+    #[pyo3(signature = (mode, version=None))]
+    fn get_up_with_mode(
+        &self,
+        py: Python<'_>,
+        mode: PyRobotMode,
+        version: Option<PyGetUpVersion>,
+    ) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(
-            py,
-            async move { client.get_up_with_mode(mode.into()).await },
-        )
+        wait_for_future(py, async move {
+            match version {
+                Some(version) => {
+                    client
+                        .get_up_with_mode_and_version(mode.into(), version.into())
+                        .await
+                }
+                None => client.get_up_with_mode(mode.into()).await,
+            }
+        })
         .map_err(to_py_err)
+    }
+
+    fn get_sensors(&self, py: Python<'_>) -> PyResult<PyDeviceInfo> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.get_sensors().await })
+            .map(Into::into)
+            .map_err(to_py_err)
+    }
+
+    fn get_hands(&self, py: Python<'_>) -> PyResult<PyDeviceInfo> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.get_hands().await })
+            .map(Into::into)
+            .map_err(to_py_err)
+    }
+
+    fn get_robot_model(&self, py: Python<'_>) -> PyResult<PyDeviceInfo> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.get_robot_model().await })
+            .map(Into::into)
+            .map_err(to_py_err)
     }
 
     fn shoot(&self, py: Python<'_>) -> PyResult<()> {
@@ -1824,6 +1965,9 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyWholeBodyDanceId>()?;
     m.add_class::<PyVisualKickVersion>()?;
     m.add_class::<PyGaitType>()?;
+    m.add_class::<PyGetUpVersion>()?;
+    m.add_class::<PyDeviceInfoKind>()?;
+    m.add_class::<PyDeviceInfo>()?;
     m.add_class::<PyJointOrder>()?;
     m.add_class::<PyBodyControl>()?;
     m.add_class::<PyAction>()?;

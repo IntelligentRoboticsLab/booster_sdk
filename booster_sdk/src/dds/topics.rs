@@ -44,6 +44,7 @@ pub const TYPE_LIGHT_CONTROL: &str = "booster_interface::msg::dds_::LightControl
 pub const TYPE_SAFE_MODE: &str = "booster_msgs::msg::dds_::BinaryData_";
 pub const TYPE_SUBTITLE: &str = "booster_interface::msg::dds_::Subtitle_";
 pub const TYPE_ASR_CHUNK: &str = "booster_interface::msg::dds_::AsrChunk_";
+pub const TYPE_BLUETOOTH_EVENT: &str = "booster_msgs::audio::BluetoothEventTopic";
 
 pub const LOCO_API_TOPIC: &str = "rt/LocoApiTopic";
 pub const AI_API_TOPIC: &str = "rt/AiApiTopic";
@@ -51,6 +52,8 @@ pub const LUI_API_TOPIC: &str = "rt/LuiApiTopic";
 pub const LIGHT_CONTROL_API_TOPIC: &str = "rt/LightControlApiTopic";
 pub const VISION_API_TOPIC: &str = "rt/VisionApiTopic";
 pub const X5_CAMERA_CONTROL_API_TOPIC: &str = "rt/X5CameraControl";
+pub const CAMERA_API_TOPIC: &str = "rt/CameraApiTopic";
+pub const HAND_EYE_CALIB_API_TOPIC: &str = "rt/HandEyeCalibApiTopic";
 
 pub fn rpc_request_topic(service_topic: &str) -> TopicSpec {
     TopicSpec {
@@ -181,6 +184,15 @@ pub fn lui_asr_chunk_topic() -> TopicSpec {
     TopicSpec {
         name: "rt/lui_asr_chunk".to_owned(),
         type_name: TYPE_ASR_CHUNK,
+        qos: qos_reliable_keep_last(16),
+        kind: TopicKind::NoKey,
+    }
+}
+
+pub fn audio_bluetooth_event_topic() -> TopicSpec {
+    TopicSpec {
+        name: "rt/booster/audio/bluetooth_events".to_owned(),
+        type_name: TYPE_BLUETOOTH_EVENT,
         qos: qos_reliable_keep_last(16),
         kind: TopicKind::NoKey,
     }

@@ -72,6 +72,7 @@ version = "0.1.1-alpha.2"
 dependencies = [
  "booster_sdk",
  "pyo3",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

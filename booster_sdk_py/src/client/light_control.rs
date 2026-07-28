@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use booster_sdk::client::light_control::LightControlClient;
+use booster_sdk::client::light_control::{LightControlClient, SetLedLightColorParameter};
 use pyo3::{Bound, prelude::*, types::PyModule};
 
 use crate::{runtime::wait_for_future, startup_wait_from_seconds, to_py_err};
@@ -35,6 +35,19 @@ impl PyLightControlClient {
         let client = Arc::clone(&self.client);
         wait_for_future(py, async move { client.set_led_light_color(r, g, b).await })
             .map_err(to_py_err)
+    }
+
+    fn set_led_light_colors(&self, py: Python<'_>, colors: Vec<(u8, u8, u8)>) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        let colors: Vec<_> = colors
+            .into_iter()
+            .map(|(r, g, b)| SetLedLightColorParameter { r, g, b })
+            .collect();
+        wait_for_future(
+            py,
+            async move { client.set_led_light_colors(&colors).await },
+        )
+        .map_err(to_py_err)
     }
 
     fn stop_led_light_control(&self, py: Python<'_>) -> PyResult<()> {
