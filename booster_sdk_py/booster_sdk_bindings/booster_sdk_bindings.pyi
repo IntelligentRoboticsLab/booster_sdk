@@ -171,9 +171,11 @@ class WholeBodyDanceId:
     MICHAEL_DANCE_1: WholeBodyDanceId
     MICHAEL_DANCE_2: WholeBodyDanceId
     MICHAEL_DANCE_3: WholeBodyDanceId
-    MOON_WALK: WholeBodyDanceId
     BOXING_STYLE_KICK: WholeBodyDanceId
     ROUNDHOUSE_KICK: WholeBodyDanceId
+    SHAN_HE_GU_REN_DANCE: WholeBodyDanceId
+    GAI_GE_CHUN_FENG_DANCE: WholeBodyDanceId
+    MICHAEL_DANCE_1_AND_2: WholeBodyDanceId
 
     def __repr__(self) -> str:
         """Return a stable enum-style representation."""
@@ -183,6 +185,39 @@ class WholeBodyDanceId:
         ...
     def __eq__(self, other: object) -> bool:
         """Return ``True`` when both values represent the same dance id."""
+        ...
+
+class VisualKickVersion:
+    """Visual-kick behavior version for :meth:`BoosterClient.visual_kick_with_version`."""
+
+    V1: VisualKickVersion
+    V2: VisualKickVersion
+
+    def __repr__(self) -> str:
+        """Return a stable enum-style representation."""
+        ...
+    def __int__(self) -> int:
+        """Return the raw integer value used by the RPC API."""
+        ...
+    def __eq__(self, other: object) -> bool:
+        """Return ``True`` when both values represent the same version."""
+        ...
+
+class GaitType:
+    """Gait selectors for :meth:`BoosterClient.switch_gait`."""
+
+    WHOLE_BODY_HUMANLIKE_GAIT: GaitType
+    HALF_BODY_HUMANLIKE_GAIT: GaitType
+    HALF_BODY_HUMANLIKE_GAIT_V2: GaitType
+
+    def __repr__(self) -> str:
+        """Return a stable enum-style representation."""
+        ...
+    def __int__(self) -> int:
+        """Return the raw integer value used by the RPC API."""
+        ...
+    def __eq__(self, other: object) -> bool:
+        """Return ``True`` when both values represent the same gait."""
         ...
 
 class JointOrder:
@@ -738,6 +773,8 @@ class GetRobotInfoResponse:
         version: str,
         model: str,
         serial_number: str,
+        edition: str = ...,
+        region: str = ...,
     ) -> None:
         """Create robot info payload."""
         ...
@@ -765,6 +802,16 @@ class GetRobotInfoResponse:
     @property
     def serial_number(self) -> str:
         """Hardware serial number."""
+        ...
+
+    @property
+    def edition(self) -> str:
+        """Robot edition string."""
+        ...
+
+    @property
+    def region(self) -> str:
+        """Robot region string."""
         ...
 
 class LoadCustomTrainedTrajResponse:
@@ -1057,7 +1104,27 @@ class BoosterClient:
         ...
 
     def visual_kick(self, start: bool) -> None:
-        """Start or stop a visual kick (side-foot kick)."""
+        """Start or stop a visual kick (side-foot kick) using v1.6 V2 behavior."""
+        ...
+
+    def visual_kick_with_version(self, start: bool, version: VisualKickVersion) -> None:
+        """Start or stop visual kick using a specific v1.6 behavior version."""
+        ...
+
+    def lion_dance_prepare(self, start: bool) -> None:
+        """Start or stop lion-dance preparation."""
+        ...
+
+    def lion_dance_start(self, dance_idx: int) -> None:
+        """Start lion dance routine by dance index."""
+        ...
+
+    def lion_dance_move(self, start: bool) -> None:
+        """Start or stop lion-dance movement."""
+        ...
+
+    def switch_gait(self, gait_type: GaitType) -> None:
+        """Switch between supported humanlike gait controllers."""
         ...
 
     def publish_gripper_command(self, command: GripperCommand) -> None:
@@ -1072,6 +1139,373 @@ class BoosterClient:
         speed: int | None = ...,
     ) -> None:
         """Convenience wrapper for publishing gripper command fields."""
+        ...
+
+class AudioSourceType:
+    """Audio source type accepted by :class:`PlayerInitOptions`."""
+
+    PCM_FILE: AudioSourceType
+    WAV_FILE: AudioSourceType
+    PCM_STREAM: AudioSourceType
+    MP3_FILE: AudioSourceType
+
+    def __int__(self) -> int:
+        """Return the raw integer value used by the RPC API."""
+        ...
+    def __eq__(self, other: object) -> bool:
+        """Return ``True`` when both values represent the same source type."""
+        ...
+
+class PlayerPriority:
+    """Playback priority used when initializing a player session."""
+
+    LOW: PlayerPriority
+    MEDIUM: PlayerPriority
+    HIGH: PlayerPriority
+
+    def __int__(self) -> int:
+        """Return the raw integer value used by the RPC API."""
+        ...
+    def __eq__(self, other: object) -> bool:
+        """Return ``True`` when both values represent the same priority."""
+        ...
+
+class PlayerState:
+    """Player state values returned by :meth:`PlayerInfo.state_enum`."""
+
+    IDLE: PlayerState
+    READY: PlayerState
+    PLAYING: PlayerState
+    PAUSED: PlayerState
+    STOPPED: PlayerState
+    COMPLETED: PlayerState
+    ERROR: PlayerState
+
+    def __int__(self) -> int:
+        """Return the raw integer value used by the RPC API."""
+        ...
+    def __eq__(self, other: object) -> bool:
+        """Return ``True`` when both values represent the same state."""
+        ...
+
+class RecorderState:
+    """Recorder state values returned by :meth:`RecorderInfo.state_enum`."""
+
+    IDLE: RecorderState
+    READY: RecorderState
+    RECORDING: RecorderState
+    PAUSED: RecorderState
+    STOPPED: RecorderState
+    ERROR: RecorderState
+
+    def __int__(self) -> int:
+        """Return the raw integer value used by the RPC API."""
+        ...
+    def __eq__(self, other: object) -> bool:
+        """Return ``True`` when both values represent the same state."""
+        ...
+
+class AudioCaptureStreamState:
+    """Capture-stream state values returned by :meth:`AudioCaptureStreamInfo.state_enum`."""
+
+    IDLE: AudioCaptureStreamState
+    READY: AudioCaptureStreamState
+    STREAMING: AudioCaptureStreamState
+    PAUSED: AudioCaptureStreamState
+    STOPPED: AudioCaptureStreamState
+    ERROR: AudioCaptureStreamState
+
+    def __int__(self) -> int:
+        """Return the raw integer value used by the RPC API."""
+        ...
+    def __eq__(self, other: object) -> bool:
+        """Return ``True`` when both values represent the same state."""
+        ...
+
+class PcmFormat:
+    """PCM sample format used by audio player, recorder, and capture APIs."""
+
+    def __init__(
+        self,
+        sample_rate_hz: int = ...,
+        channels: int = ...,
+        bits_per_sample: int = ...,
+    ) -> None:
+        """Create a PCM format descriptor."""
+        ...
+    @property
+    def sample_rate_hz(self) -> int:
+        """Sample rate in Hz."""
+        ...
+    @property
+    def channels(self) -> int:
+        """Number of audio channels."""
+        ...
+    @property
+    def bits_per_sample(self) -> int:
+        """Bits per PCM sample."""
+        ...
+
+class PlayerInitOptions:
+    """Options used to initialize an audio playback session."""
+
+    def __init__(
+        self,
+        source_type: AudioSourceType,
+        source_uri: str,
+        sample_rate_hz: int = ...,
+        channels: int = ...,
+        bits_per_sample: int = ...,
+        priority: PlayerPriority | None = ...,
+    ) -> None:
+        """Create playback initialization options."""
+        ...
+    @staticmethod
+    def pcm_stream() -> PlayerInitOptions:
+        """Create options for a PCM streaming player session."""
+        ...
+
+class RecorderInitOptions:
+    """Options used to initialize an audio recorder session."""
+
+    def __init__(
+        self,
+        output_path: str,
+        sample_rate_hz: int = ...,
+        channels: int = ...,
+        bits_per_sample: int = ...,
+    ) -> None:
+        """Create recorder initialization options."""
+        ...
+
+class AudioCaptureStreamOptions:
+    """Options used to initialize an audio capture stream session."""
+
+    def __init__(
+        self,
+        enable_raw_pcm: bool = ...,
+        enable_naec_pcm: bool = ...,
+        requested_raw_format: PcmFormat | None = ...,
+    ) -> None:
+        """Create capture-stream initialization options."""
+        ...
+
+class InitPlayerResponse:
+    """Response returned by :meth:`AudioClient.init_player`."""
+
+    @property
+    def ret_code(self) -> int:
+        """Service return code."""
+        ...
+    @property
+    def ret_msg(self) -> str:
+        """Service return message."""
+        ...
+    @property
+    def session_id(self) -> int:
+        """Initialized player session id."""
+        ...
+
+class InitRecorderResponse:
+    """Response returned by :meth:`AudioClient.init_recorder`."""
+
+    @property
+    def ret_code(self) -> int:
+        """Service return code."""
+        ...
+    @property
+    def ret_msg(self) -> str:
+        """Service return message."""
+        ...
+    @property
+    def session_id(self) -> int:
+        """Initialized session id."""
+        ...
+
+class InitCaptureStreamResponse:
+    """Response returned by :meth:`AudioClient.init_capture_stream`."""
+
+    @property
+    def ret_code(self) -> int:
+        """Service return code."""
+        ...
+    @property
+    def ret_msg(self) -> str:
+        """Service return message."""
+        ...
+    @property
+    def session_id(self) -> int:
+        """Initialized capture stream session id."""
+        ...
+    @property
+    def data_topic_name(self) -> str:
+        """DDS topic name carrying capture frame data for this session."""
+        ...
+
+class PlayerInfo:
+    """Current player session state."""
+
+    @property
+    def state(self) -> int:
+        """Raw player state value."""
+        ...
+    def state_enum(self) -> PlayerState | None:
+        """Player state converted to ``PlayerState`` when known."""
+        ...
+    @property
+    def played_bytes(self) -> int:
+        """Number of bytes already played."""
+        ...
+    @property
+    def total_bytes(self) -> int:
+        """Total bytes for the playback source when known."""
+        ...
+    @property
+    def volume(self) -> float:
+        """Player volume."""
+        ...
+
+class RecorderInfo:
+    """Current recorder session state."""
+
+    @property
+    def state(self) -> int:
+        """Raw recorder state value."""
+        ...
+    def state_enum(self) -> RecorderState | None:
+        """Recorder state converted to ``RecorderState`` when known."""
+        ...
+    @property
+    def captured_bytes(self) -> int:
+        """Number of bytes captured by the recorder."""
+        ...
+
+class AudioCaptureStreamInfo:
+    """Current audio capture stream state."""
+
+    @property
+    def state(self) -> int:
+        """Raw capture-stream state value."""
+        ...
+    def state_enum(self) -> AudioCaptureStreamState | None:
+        """Capture-stream state converted to ``AudioCaptureStreamState`` when known."""
+        ...
+    @property
+    def raw_enabled(self) -> bool:
+        """Whether raw PCM capture is enabled."""
+        ...
+    @property
+    def naec_enabled(self) -> bool:
+        """Whether NAEC PCM capture is enabled."""
+        ...
+    @property
+    def actual_raw_format(self) -> PcmFormat:
+        """Actual raw PCM format returned by the service."""
+        ...
+    @property
+    def actual_naec_format(self) -> PcmFormat:
+        """Actual NAEC PCM format returned by the service."""
+        ...
+    @property
+    def published_frames(self) -> int:
+        """Number of capture frames published by the service."""
+        ...
+    @property
+    def dropped_frames(self) -> int:
+        """Number of capture frames dropped by the service."""
+        ...
+
+class AudioClient:
+    """Client for the v1.6 audio service RPC APIs."""
+
+    def __init__(self, startup_wait_sec: float | None = ...) -> None:
+        """Create an audio client."""
+        ...
+    def init(self) -> str:
+        """Register this client with the audio service and return its client id."""
+        ...
+    def client_id(self) -> str | None:
+        """Return the cached audio service client id, if initialized."""
+        ...
+    def init_player(self, options: PlayerInitOptions) -> InitPlayerResponse:
+        """Initialize a player session."""
+        ...
+    def start_player(self, session_id: int) -> None:
+        """Start playback for a player session."""
+        ...
+    def pause_player(self, session_id: int) -> None:
+        """Pause playback for a player session."""
+        ...
+    def stop_player(self, session_id: int) -> None:
+        """Stop playback for a player session."""
+        ...
+    def reset_player(self, session_id: int) -> None:
+        """Reset a player session."""
+        ...
+    def destroy_player(self, session_id: int) -> None:
+        """Destroy a player session."""
+        ...
+    def set_player_volume(self, session_id: int, volume: float) -> None:
+        """Set volume for a player session."""
+        ...
+    def get_player_info(self, session_id: int) -> PlayerInfo:
+        """Fetch current player session info."""
+        ...
+    def send_pcm_data(self, session_id: int, pcm_bytes: bytes) -> None:
+        """Send PCM bytes to a PCM stream player session."""
+        ...
+    def init_recorder(self, options: RecorderInitOptions) -> InitRecorderResponse:
+        """Initialize a recorder session."""
+        ...
+    def start_recorder(self, session_id: int) -> None:
+        """Start recording."""
+        ...
+    def pause_recorder(self, session_id: int) -> None:
+        """Pause recording."""
+        ...
+    def stop_recorder(self, session_id: int) -> None:
+        """Stop recording."""
+        ...
+    def destroy_recorder(self, session_id: int) -> None:
+        """Destroy a recorder session."""
+        ...
+    def get_recorder_info(self, session_id: int) -> RecorderInfo:
+        """Fetch current recorder session info."""
+        ...
+    def get_doa_angle(self) -> int:
+        """Fetch direction-of-arrival angle in degrees."""
+        ...
+    def set_system_volume(self, volume: float) -> None:
+        """Set system output volume."""
+        ...
+    def get_system_volume(self) -> float:
+        """Fetch system output volume."""
+        ...
+    def set_system_mute(self, mute: bool) -> None:
+        """Set system mute state."""
+        ...
+    def get_system_mute(self) -> bool:
+        """Fetch system mute state."""
+        ...
+    def init_capture_stream(
+        self, options: AudioCaptureStreamOptions
+    ) -> InitCaptureStreamResponse:
+        """Initialize an audio capture stream session."""
+        ...
+    def start_capture_stream(self, session_id: int) -> None:
+        """Start capture streaming."""
+        ...
+    def pause_capture_stream(self, session_id: int) -> None:
+        """Pause capture streaming."""
+        ...
+    def stop_capture_stream(self, session_id: int) -> None:
+        """Stop capture streaming."""
+        ...
+    def destroy_capture_stream(self, session_id: int) -> None:
+        """Destroy a capture stream session."""
+        ...
+    def get_capture_stream_info(self, session_id: int) -> AudioCaptureStreamInfo:
+        """Fetch current capture stream session info."""
         ...
 
 class AiClient:
