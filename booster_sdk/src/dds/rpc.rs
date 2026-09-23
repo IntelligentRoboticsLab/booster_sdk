@@ -243,6 +243,30 @@ impl RpcClient {
     where
         R: DeserializeOwned + Send + 'static,
     {
+        let header = serde_json::json!({ "api_id": api_id }).to_string();
+        let response_body = self
+            .call_with_header(api_id, header, body.into(), timeout)
+            .await?;
+
+        decode_response_body(&response_body).map_err(|err| {
+            RpcError::RequestFailed {
+                status: 0,
+                message: format!("Failed to deserialize response body: {err}"),
+            }
+            .into()
+        })
+    }
+
+    /// Send a request with a pre-built JSON header and return the raw response body.
+    ///
+    /// Non-zero response statuses are returned as errors.
+    pub(crate) async fn call_with_header(
+        &self,
+        api_id: i32,
+        header: String,
+        body: String,
+        timeout: Option<Duration>,
+    ) -> Result<String> {
         if self.startup_wait > Duration::from_millis(0)
             && !self.startup_wait_done.swap(true, Ordering::SeqCst)
         {
@@ -259,8 +283,6 @@ impl RpcClient {
         let mut response_stream = self.response_stream.lock().await;
 
         let request_id = Uuid::new_v4().to_string();
-        let body = body.into();
-        let header = serde_json::json!({ "api_id": api_id }).to_string();
         let service_topic = self.service_topic.clone();
 
         tracing::debug!(
@@ -364,13 +386,7 @@ impl RpcClient {
                 return Err(RpcError::from_status_code(status_code, message).into());
             }
 
-            let result: R =
-                decode_response_body(&response.body).map_err(|err| RpcError::RequestFailed {
-                    status: status_code,
-                    message: format!("Failed to deserialize response body: {err}"),
-                })?;
-
-            return Ok(result);
+            return Ok(response.body);
         }
     }
 }

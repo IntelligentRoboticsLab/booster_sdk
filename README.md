@@ -37,10 +37,22 @@ client.move_robot(0.5, 0.0, 0.0)
 
 ```
 
-The Rust crate and Python bindings support the Booster 1.7 SDK, including
+The Rust crate and Python bindings support the Booster 1.8 SDK, including
 locomotion, robot/device catalog discovery, gripper and LED control, AI/LUI and
 vision RPCs, camera discovery, hand-eye calibration, and audio
 device/Bluetooth management.
+
+SDK 1.8 additions include:
+
+- asynchronous RPC operations with progress/result events and cancellation
+  (`BoosterClient::start_operation` / `cancel_operation`, Rust only);
+- resetting odometry to a target pose (`reset_odometry_to`);
+- per-client LUI ASR/TTS sessions, speech synthesis to audio, and one-shot or
+  session-based audio recognition;
+- an optional AgentHub `persona_id` for AI chat;
+- the extended LUI ASR chunk message (session, timing, speaker and utterance
+  details);
+- the low-battery RPC status (503) and a 3-channel default raw capture format.
 
 SDK 1.7 additions include:
 
