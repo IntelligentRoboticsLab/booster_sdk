@@ -47,15 +47,20 @@ crate::api_id_enum! {
         LionDanceStart = 2040,
         LionDanceMove = 2041,
         SwitchGait = 2042,
+        RotateHeadWithTime = 2043,
+        GetSensors = 2044,
+        GetHands = 2045,
+        GetRobotModel = 2046,
     }
 }
 
 crate::api_id_enum! {
-    /// B1 v1.6 gait selectors.
+    /// B1 gait selectors.
     GaitType {
         WholeBodyHumanlikeGait = 0,
         HalfBodyHumanlikeGait = 1,
         HalfBodyHumanlikeGaitV2 = 2,
+        WholeBodyHumanlikeGaitV2 = 3,
     }
 }
 
@@ -75,6 +80,29 @@ crate::api_id_enum! {
         InsideFoot = 10,
         Goalie = 11,
         WbcGait = 12,
+        LionDancePreparePose = 13,
+        VisualKickV1 = 14,
+    }
+}
+
+crate::api_id_enum! {
+    /// Get-up behavior implementation.
+    GetUpVersion {
+        /// Initial/base get-up behavior.
+        V1 = 0,
+        /// BMM get-up behavior introduced with SDK 1.7.
+        V2 = 1,
+    }
+}
+
+crate::api_id_enum! {
+    /// Kind of catalog returned by a device-discovery RPC.
+    DeviceInfoKind {
+        Unknown = -1,
+        Sensors = 0,
+        Hands = 1,
+        RobotModel = 2,
+        Camera = 3,
     }
 }
 
@@ -301,6 +329,24 @@ pub struct GetRobotInfoResponse {
     pub region: String,
 }
 
+/// JSON-backed device catalog returned by SDK 1.7 discovery APIs.
+///
+/// The robot owns these schemas and may extend them between firmware releases,
+/// so the body remains a [`serde_json::Value`] just like the C++ SDK's
+/// `DeviceInfo::json_`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeviceInfo {
+    pub kind: DeviceInfoKind,
+    pub body: serde_json::Value,
+}
+
+impl DeviceInfo {
+    #[must_use]
+    pub fn new(kind: DeviceInfoKind, body: serde_json::Value) -> Self {
+        Self { kind, body }
+    }
+}
+
 /// Model parameters used by custom trajectories.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CustomModelParams {
@@ -332,3 +378,30 @@ pub struct LoadCustomTrainedTrajResponse {
 
 /// Convenience alias matching the C++ naming.
 pub type HandIndex = Hand;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn sdk_1_7_ids_match_cpp_sdk() {
+        assert_eq!(i32::from(LocoApiId::RotateHeadWithTime), 2043);
+        assert_eq!(i32::from(LocoApiId::GetSensors), 2044);
+        assert_eq!(i32::from(LocoApiId::GetHands), 2045);
+        assert_eq!(i32::from(LocoApiId::GetRobotModel), 2046);
+        assert_eq!(i32::from(GaitType::WholeBodyHumanlikeGaitV2), 3);
+        assert_eq!(i32::from(BodyControl::VisualKickV1), 14);
+    }
+
+    #[test]
+    fn device_info_preserves_extensible_json_body() {
+        let info = DeviceInfo::new(
+            DeviceInfoKind::Sensors,
+            json!({"imus": [{"index": 0, "future_field": true}]}),
+        );
+        let encoded = serde_json::to_value(&info).unwrap();
+        assert_eq!(encoded["kind"], 0);
+        assert_eq!(encoded["body"]["imus"][0]["future_field"], true);
+    }
+}

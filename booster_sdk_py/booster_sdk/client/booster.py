@@ -18,6 +18,9 @@ DanceId = bindings.DanceId
 WholeBodyDanceId = bindings.WholeBodyDanceId
 VisualKickVersion = bindings.VisualKickVersion
 GaitType = bindings.GaitType
+GetUpVersion = bindings.GetUpVersion
+DeviceInfoKind = bindings.DeviceInfoKind
+DeviceInfo = bindings.DeviceInfo
 JointOrder = bindings.JointOrder
 BodyControl = bindings.BodyControl
 Action = bindings.Action
@@ -51,6 +54,9 @@ __all__ = [
     "WholeBodyDanceId",
     "VisualKickVersion",
     "GaitType",
+    "GetUpVersion",
+    "DeviceInfoKind",
+    "DeviceInfo",
     "JointOrder",
     "BodyControl",
     "Action",

@@ -11,10 +11,11 @@ use crate::dds::{
     video_stream_topic,
 };
 use crate::types::{
-    BoosterHandType, CustomTrainedTraj, DanceId, DexterousFingerParameter, Frame, GaitType,
-    GetModeResponse, GetRobotInfoResponse, GetStatusResponse, GripperControlMode, GripperMode,
-    GripperMotionParameter, Hand, HandAction, HandIndex, LoadCustomTrainedTrajResponse, LocoApiId,
-    Result, RobotMode, Transform, VisualKickVersion, WholeBodyDanceId,
+    BoosterHandType, CustomTrainedTraj, DanceId, DeviceInfo, DeviceInfoKind,
+    DexterousFingerParameter, Frame, GaitType, GetModeResponse, GetRobotInfoResponse,
+    GetStatusResponse, GetUpVersion, GripperControlMode, GripperMode, GripperMotionParameter, Hand,
+    HandAction, HandIndex, LoadCustomTrainedTrajResponse, LocoApiId, Result, RobotMode, Transform,
+    VisualKickVersion, WholeBodyDanceId,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -93,6 +94,19 @@ impl BoosterClient {
         self.rpc.call_void(LocoApiId::RotateHead, param).await
     }
 
+    /// Rotate the head to absolute pitch/yaw angles within a requested duration.
+    pub async fn rotate_head_with_time(
+        &self,
+        pitch: f32,
+        yaw: f32,
+        time_millis: i32,
+    ) -> Result<()> {
+        let param = json!({ "pitch": pitch, "yaw": yaw, "time_millis": time_millis }).to_string();
+        self.rpc
+            .call_void(LocoApiId::RotateHeadWithTime, param)
+            .await
+    }
+
     /// Trigger a right-hand wave action.
     pub async fn wave_hand(&self, action: HandAction) -> Result<()> {
         let param = json!({
@@ -126,13 +140,47 @@ impl BoosterClient {
 
     /// Command the robot to get up.
     pub async fn get_up(&self) -> Result<()> {
-        self.rpc.call_void(LocoApiId::GetUp, "").await
+        self.get_up_with_version(GetUpVersion::V1).await
+    }
+
+    /// Command the robot to get up using a specific behavior implementation.
+    pub async fn get_up_with_version(&self, version: GetUpVersion) -> Result<()> {
+        let param = json!({ "version": i32::from(version) }).to_string();
+        self.rpc.call_void(LocoApiId::GetUp, param).await
     }
 
     /// Command the robot to get up into a specific mode.
     pub async fn get_up_with_mode(&self, mode: RobotMode) -> Result<()> {
-        let param = json!({ "mode": i32::from(mode) }).to_string();
+        self.get_up_with_mode_and_version(mode, GetUpVersion::V1)
+            .await
+    }
+
+    /// Command the robot to get up into a mode using a specific behavior implementation.
+    pub async fn get_up_with_mode_and_version(
+        &self,
+        mode: RobotMode,
+        version: GetUpVersion,
+    ) -> Result<()> {
+        let param = json!({ "mode": i32::from(mode), "version": i32::from(version) }).to_string();
         self.rpc.call_void(LocoApiId::GetUpWithMode, param).await
+    }
+
+    /// Query the static IMU sensor catalog from the robot configuration.
+    pub async fn get_sensors(&self) -> Result<DeviceInfo> {
+        let body = self.rpc.call_response(LocoApiId::GetSensors, "").await?;
+        Ok(DeviceInfo::new(DeviceInfoKind::Sensors, body))
+    }
+
+    /// Query the static hand end-effector catalog from the robot configuration.
+    pub async fn get_hands(&self) -> Result<DeviceInfo> {
+        let body = self.rpc.call_response(LocoApiId::GetHands, "").await?;
+        Ok(DeviceInfo::new(DeviceInfoKind::Hands, body))
+    }
+
+    /// Query the static URDF-derived robot model.
+    pub async fn get_robot_model(&self) -> Result<DeviceInfo> {
+        let body = self.rpc.call_response(LocoApiId::GetRobotModel, "").await?;
+        Ok(DeviceInfo::new(DeviceInfoKind::RobotModel, body))
     }
 
     /// Trigger a shoot action.

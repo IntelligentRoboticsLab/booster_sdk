@@ -20,6 +20,18 @@ InitCaptureStreamResponse = bindings.InitCaptureStreamResponse
 PlayerInfo = bindings.PlayerInfo
 RecorderInfo = bindings.RecorderInfo
 AudioCaptureStreamInfo = bindings.AudioCaptureStreamInfo
+AudioDeviceQueryType = bindings.AudioDeviceQueryType
+AudioDeviceDirection = bindings.AudioDeviceDirection
+AudioDeviceTransport = bindings.AudioDeviceTransport
+AudioDeviceBackendAffinity = bindings.AudioDeviceBackendAffinity
+AudioDeviceInfo = bindings.AudioDeviceInfo
+BluetoothDeviceState = bindings.BluetoothDeviceState
+BluetoothMajorClass = bindings.BluetoothMajorClass
+BluetoothAudioProfile = bindings.BluetoothAudioProfile
+BluetoothDeviceInfo = bindings.BluetoothDeviceInfo
+BluetoothScanOptions = bindings.BluetoothScanOptions
+BluetoothConnectOptions = bindings.BluetoothConnectOptions
+BluetoothConnectResult = bindings.BluetoothConnectResult
 
 __all__ = [
     "AudioClient",
@@ -38,4 +50,16 @@ __all__ = [
     "PlayerInfo",
     "RecorderInfo",
     "AudioCaptureStreamInfo",
+    "AudioDeviceQueryType",
+    "AudioDeviceDirection",
+    "AudioDeviceTransport",
+    "AudioDeviceBackendAffinity",
+    "AudioDeviceInfo",
+    "BluetoothDeviceState",
+    "BluetoothMajorClass",
+    "BluetoothAudioProfile",
+    "BluetoothDeviceInfo",
+    "BluetoothScanOptions",
+    "BluetoothConnectOptions",
+    "BluetoothConnectResult",
 ]

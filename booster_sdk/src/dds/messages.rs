@@ -155,3 +155,13 @@ pub struct SafeMode {
     /// Raw payload for safe mode (schema not documented in DDS reference).
     pub data: Vec<u8>,
 }
+
+/// Bluetooth lifecycle event published by the SDK 1.7 audio service.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BluetoothEvent {
+    pub timestamp_ms: i64,
+    pub event_type: String,
+    pub address: String,
+    pub payload_json: String,
+    pub error_code: i32,
+}

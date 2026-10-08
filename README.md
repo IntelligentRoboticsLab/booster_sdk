@@ -37,7 +37,18 @@ client.move_robot(0.5, 0.0, 0.0)
 
 ```
 
-The Python bindings cover core control flows, including locomotion, gripper control, AI/LUI RPC calls, vision RPC calls, and X5 camera RPC calls.
+The Rust crate and Python bindings support the Booster 1.7 SDK, including
+locomotion, robot/device catalog discovery, gripper and LED control, AI/LUI and
+vision RPCs, camera discovery, hand-eye calibration, and audio
+device/Bluetooth management.
+
+SDK 1.7 additions include:
+
+- timed head rotation and selectable v1/v2 get-up behavior;
+- sensor, hand, robot-model, and camera catalog queries;
+- multi-pixel LED updates;
+- audio device enumeration and Bluetooth scan/connect/disconnect/forget APIs;
+- hand-eye calibration start, status, result, and apply APIs.
 
 ## Contributing
 
