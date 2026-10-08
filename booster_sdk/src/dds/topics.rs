@@ -55,6 +55,9 @@ pub const X5_CAMERA_CONTROL_API_TOPIC: &str = "rt/X5CameraControl";
 pub const CAMERA_API_TOPIC: &str = "rt/CameraApiTopic";
 pub const HAND_EYE_CALIB_API_TOPIC: &str = "rt/HandEyeCalibApiTopic";
 
+pub const LOCO_API_OPERATION_EVENT_TOPIC: &str = "rt/LocoApiOperationEvent";
+pub const LUI_API_OPERATION_EVENT_TOPIC: &str = "rt/LuiApiOperationEvent";
+
 pub fn rpc_request_topic(service_topic: &str) -> TopicSpec {
     TopicSpec {
         name: format!("{service_topic}Req"),

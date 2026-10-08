@@ -381,7 +381,10 @@ impl PyAudioCaptureStreamOptions {
         Self(AudioCaptureStreamOptions {
             enable_raw_pcm,
             enable_naec_pcm,
-            requested_raw_format: requested_raw_format.map(Into::into).unwrap_or_default(),
+            requested_raw_format: requested_raw_format.map_or_else(
+                || AudioCaptureStreamOptions::default().requested_raw_format,
+                Into::into,
+            ),
         })
     }
 }

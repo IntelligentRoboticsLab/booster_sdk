@@ -687,8 +687,13 @@ class StartAiChatParameter:
         llm_config: LlmConfig,
         tts_config: TtsConfig,
         enable_face_tracking: bool,
+        persona_id: str | None = None,
     ) -> None:
         """Create AI chat startup parameters."""
+        ...
+    @property
+    def persona_id(self) -> str | None:
+        """Optional AgentHub persona identifier."""
         ...
     @property
     def interrupt_mode(self) -> bool:
@@ -1118,6 +1123,10 @@ class BoosterClient:
         """Toggle upper-body custom control mode."""
         ...
 
+    def reset_odometry_to(self, x: float, y: float, theta: float) -> None:
+        """Reset odometry to a target pose (meters, radians)."""
+        ...
+
     def reset_odometry(self) -> None:
         """Reset base odometry estimate."""
         ...
@@ -1338,7 +1347,10 @@ class AudioCaptureStreamOptions:
         enable_naec_pcm: bool = ...,
         requested_raw_format: PcmFormat | None = ...,
     ) -> None:
-        """Create capture-stream initialization options."""
+        """Create capture-stream initialization options.
+
+        ``requested_raw_format`` defaults to 16 kHz, 3-channel, 16-bit PCM.
+        """
         ...
 
 class InitPlayerResponse:
@@ -1752,8 +1764,95 @@ class AiClient:
         """Disable AI face tracking mode."""
         ...
 
+class LuiSynthesizeSpeechRequest:
+    """Payload for :meth:`LuiClient.synthesize_speech`."""
+
+    def __init__(
+        self,
+        text: str,
+        voice_type: str = "default",
+        speed: float = 1.0,
+        playback: bool = False,
+    ) -> None:
+        """Create a synthesis request.
+
+        Args:
+            text: Text to synthesize, at most 1000 Unicode code points.
+            voice_type: Voice identifier.
+            speed: Speech speed ratio; 1.0 is normal, 0.5 slowest, 2.0 fastest.
+            playback: Whether the robot should also play the audio.
+        """
+        ...
+    @property
+    def text(self) -> str: ...
+    @property
+    def voice_type(self) -> str: ...
+    @property
+    def speed(self) -> float: ...
+    @property
+    def playback(self) -> bool: ...
+
+class LuiSynthesizeSpeechResponse:
+    """Audio returned by :meth:`LuiClient.synthesize_speech`."""
+
+    @property
+    def audio_base64(self) -> str:
+        """Base64-encoded audio data."""
+        ...
+    @property
+    def sample_rate_hz(self) -> int: ...
+    @property
+    def channels(self) -> int: ...
+    @property
+    def bits_per_sample(self) -> int: ...
+    @property
+    def format(self) -> str:
+        """Audio format, e.g. ``pcm_s16le``."""
+        ...
+
+class LuiRecognizeAudioRequest:
+    """Payload for the LUI audio recognition APIs."""
+
+    @staticmethod
+    def from_file(file_path: str) -> LuiRecognizeAudioRequest:
+        """Recognize a ``.wav`` or ``.mp3`` file on the robot."""
+        ...
+    @staticmethod
+    def from_pcm_base64(audio_base64: str) -> LuiRecognizeAudioRequest:
+        """Recognize base64-encoded 16 kHz mono 16-bit little-endian raw PCM.
+
+        Audio is limited to 120 s and 6 MiB decoded.
+        """
+        ...
+    @property
+    def input_type(self) -> str:
+        """``"file"`` or ``"pcm"``."""
+        ...
+    @property
+    def file_path(self) -> str: ...
+    @property
+    def sample_rate_hz(self) -> int: ...
+    @property
+    def channels(self) -> int: ...
+    @property
+    def bits_per_sample(self) -> int: ...
+    @property
+    def format(self) -> str: ...
+
+class LuiRecognizeAudioResponse:
+    """Recognition result."""
+
+    @property
+    def text(self) -> str:
+        """Recognized text."""
+        ...
+
 class LuiClient:
-    """Client for LUI ASR/TTS APIs."""
+    """Client for LUI ASR/TTS APIs.
+
+    ASR, TTS and audio recognizer sessions are owned by the client instance
+    that started them.
+    """
 
     def __init__(self, startup_wait_sec: float | None = ...) -> None:
         """Create LUI client.
@@ -1781,6 +1880,58 @@ class LuiClient:
 
     def send_tts_text(self, param: LuiTtsParameter) -> None:
         """Send text payload for TTS synthesis."""
+        ...
+
+    @property
+    def client_id(self) -> str:
+        """Identifier of this client instance."""
+        ...
+
+    @property
+    def current_asr_session_id(self) -> str | None:
+        """ASR session started by this client, if any."""
+        ...
+
+    @property
+    def current_audio_recognizer_session_id(self) -> str | None:
+        """Audio recognizer session started by this client, if any."""
+        ...
+
+    @property
+    def current_tts_session_id(self) -> str | None:
+        """TTS session started by this client, if any."""
+        ...
+
+    def synthesize_speech(
+        self, req: LuiSynthesizeSpeechRequest
+    ) -> LuiSynthesizeSpeechResponse:
+        """Synthesize speech in this client's TTS session.
+
+        Requires :meth:`start_tts`.
+        """
+        ...
+
+    def recognize_audio_once(
+        self, req: LuiRecognizeAudioRequest
+    ) -> LuiRecognizeAudioResponse:
+        """Recognize an audio file or PCM payload without a session."""
+        ...
+
+    def start_audio_recognizer(self) -> None:
+        """Start a reusable audio recognizer session owned by this client."""
+        ...
+
+    def stop_audio_recognizer(self) -> None:
+        """Stop this client's audio recognizer session."""
+        ...
+
+    def recognize_audio_in_session(
+        self, req: LuiRecognizeAudioRequest
+    ) -> LuiRecognizeAudioResponse:
+        """Recognize audio in this client's recognizer session.
+
+        Requires :meth:`start_audio_recognizer`.
+        """
         ...
 
 class LightControlClient:

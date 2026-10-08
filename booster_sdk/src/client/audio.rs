@@ -294,6 +294,20 @@ pub struct AudioCaptureStreamOptions {
     pub requested_raw_format: PcmFormat,
 }
 
+impl Default for AudioCaptureStreamOptions {
+    fn default() -> Self {
+        Self {
+            enable_raw_pcm: true,
+            enable_naec_pcm: false,
+            // BoosterAEC raw PCM default: 16 kHz, 3 channels, 16-bit.
+            requested_raw_format: PcmFormat {
+                channels: 3,
+                ..PcmFormat::default()
+            },
+        }
+    }
+}
+
 /// Generic audio service result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServiceResult {

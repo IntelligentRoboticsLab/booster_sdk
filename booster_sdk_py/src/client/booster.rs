@@ -1818,6 +1818,15 @@ impl PyBoosterClient {
         wait_for_future(py, async move { client.reset_odometry().await }).map_err(to_py_err)
     }
 
+    fn reset_odometry_to(&self, py: Python<'_>, x: f64, y: f64, theta: f64) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(
+            py,
+            async move { client.reset_odometry_to(x, y, theta).await },
+        )
+        .map_err(to_py_err)
+    }
+
     fn load_custom_trained_traj(
         &self,
         py: Python<'_>,

@@ -113,20 +113,28 @@ pub struct PyStartAiChatParameter(StartAiChatParameter);
 #[pymethods]
 impl PyStartAiChatParameter {
     #[new]
+    #[pyo3(signature = (interrupt_mode, asr_config, llm_config, tts_config, enable_face_tracking, persona_id=None))]
     fn new(
         interrupt_mode: bool,
         asr_config: PyAsrConfig,
         llm_config: PyLlmConfig,
         tts_config: PyTtsConfig,
         enable_face_tracking: bool,
+        persona_id: Option<String>,
     ) -> Self {
         Self(StartAiChatParameter {
+            persona_id,
             interrupt_mode,
             asr_config: asr_config.into(),
             llm_config: llm_config.into(),
             tts_config: tts_config.into(),
             enable_face_tracking,
         })
+    }
+
+    #[getter]
+    fn persona_id(&self) -> Option<String> {
+        self.0.persona_id.clone()
     }
 
     #[getter]

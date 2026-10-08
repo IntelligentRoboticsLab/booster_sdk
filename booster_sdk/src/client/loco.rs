@@ -1,14 +1,16 @@
 //! High-level B1 locomotion client built on DDS RPC and topic I/O.
 
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::dds::{
-    BatteryState, BinaryData, ButtonEventMsg, DdsNode, DdsPublisher, DdsSubscription,
-    GripperControl, LightControlMsg, MotionState, RemoteControllerState, RobotProcessStateMsg,
-    RobotStatusDdsMsg, RpcClient, RpcClientOptions, SafeMode, battery_state_topic,
-    button_event_topic, device_gateway_topic, gripper_control_topic, light_control_topic,
-    motion_state_topic, process_state_topic, remote_controller_topic, safe_mode_topic,
-    video_stream_topic,
+    ApiOperation, ApiOperationHandle, BatteryState, BinaryData, ButtonEventMsg,
+    DEFAULT_OPERATION_START_TIMEOUT, DdsNode, DdsPublisher, DdsSubscription, GripperControl,
+    LOCO_API_OPERATION_EVENT_TOPIC, LightControlMsg, MotionState, RemoteControllerState,
+    RobotProcessStateMsg, RobotStatusDdsMsg, RpcClient, RpcClientOptions, RpcOperationClient,
+    SafeMode, battery_state_topic, button_event_topic, device_gateway_topic, gripper_control_topic,
+    light_control_topic, motion_state_topic, process_state_topic, remote_controller_topic,
+    safe_mode_topic, video_stream_topic,
 };
 use crate::types::{
     BoosterHandType, CustomTrainedTraj, DanceId, DeviceInfo, DeviceInfoKind,
@@ -24,6 +26,7 @@ use typed_builder::TypedBuilder;
 /// High-level client for B1 locomotion control and telemetry.
 pub struct BoosterClient {
     rpc: RpcClient,
+    operations: Mutex<Option<Arc<RpcOperationClient>>>,
     gripper_publisher: DdsPublisher<GripperControl>,
     light_publisher: DdsPublisher<LightControlMsg>,
     safe_mode_publisher: DdsPublisher<SafeMode>,
@@ -50,6 +53,7 @@ impl BoosterClient {
 
         Ok(Self {
             rpc,
+            operations: Mutex::new(None),
             gripper_publisher,
             light_publisher,
             safe_mode_publisher,
@@ -59,6 +63,54 @@ impl BoosterClient {
     /// Access the underlying DDS node.
     pub fn node(&self) -> &DdsNode {
         self.rpc.node()
+    }
+
+    fn operation_client(&self) -> Result<Arc<RpcOperationClient>> {
+        let mut operations = self
+            .operations
+            .lock()
+            .map_err(|_| crate::types::BoosterError::Other("operation client poisoned".into()))?;
+        if let Some(client) = operations.as_ref() {
+            return Ok(Arc::clone(client));
+        }
+        let client = Arc::new(RpcOperationClient::new(
+            self.rpc.node(),
+            LOCO_API_OPERATION_EVENT_TOPIC,
+        )?);
+        *operations = Some(Arc::clone(&client));
+        Ok(client)
+    }
+
+    /// Start a locomotion API request as an asynchronous operation.
+    ///
+    /// Returns once the service has accepted the operation. Progress and the
+    /// final result are delivered through the returned [`ApiOperation`].
+    pub async fn start_operation(
+        &self,
+        api_id: LocoApiId,
+        param: impl Into<String>,
+    ) -> Result<ApiOperation> {
+        self.start_operation_with_timeout(api_id, param, DEFAULT_OPERATION_START_TIMEOUT)
+            .await
+    }
+
+    /// Like [`Self::start_operation`], waiting up to `start_timeout` for acceptance.
+    pub async fn start_operation_with_timeout(
+        &self,
+        api_id: LocoApiId,
+        param: impl Into<String>,
+        start_timeout: Duration,
+    ) -> Result<ApiOperation> {
+        self.operation_client()?
+            .start(&self.rpc, api_id.into(), param, start_timeout)
+            .await
+    }
+
+    /// Cancel an operation started with [`Self::start_operation`].
+    pub async fn cancel_operation(&self, handle: &ApiOperationHandle) -> Result<()> {
+        self.operation_client()?
+            .cancel(&self.rpc, handle, None)
+            .await
     }
 
     /// Change the robot mode.
@@ -382,6 +434,12 @@ impl BoosterClient {
     /// Reset odometry state.
     pub async fn reset_odometry(&self) -> Result<()> {
         self.rpc.call_void(LocoApiId::ResetOdometry, "").await
+    }
+
+    /// Reset odometry to a target pose (meters, radians).
+    pub async fn reset_odometry_to(&self, x: f64, y: f64, theta: f64) -> Result<()> {
+        let param = json!({ "x": x, "y": y, "theta": theta }).to_string();
+        self.rpc.call_void(LocoApiId::ResetOdometry, param).await
     }
 
     /// Load a custom trained trajectory.

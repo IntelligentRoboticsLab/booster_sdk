@@ -81,6 +81,9 @@ pub enum RpcError {
     #[error("State transition failed: {0}")]
     StateTransitionFailed(String),
 
+    #[error("Motion request refused because the battery is low: {0}")]
+    LowBattery(String),
+
     #[error("Invalid RPC status code: {0}")]
     InvalidStatusCode(i32),
 
@@ -103,6 +106,7 @@ impl RpcError {
             500 => RpcError::InternalServerError(message),
             501 => RpcError::ServerRefused(message),
             502 => RpcError::StateTransitionFailed(message),
+            503 => RpcError::LowBattery(message),
             _ => RpcError::RequestFailed {
                 status: code,
                 message,
