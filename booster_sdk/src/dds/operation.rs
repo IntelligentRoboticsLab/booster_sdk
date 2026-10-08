@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::types::{Result, RpcError};
 
 use super::messages::RpcRespMsg;
-use super::node::DdsNode;
+use super::node::{CallbackSubscription, DdsNode};
 use super::qos::qos_reliable_keep_last;
 use super::rpc::RpcClient;
 use super::topics::{TYPE_RPC_RESP, TopicSpec};
@@ -204,37 +204,24 @@ impl Drop for ApiOperation {
 /// the service's operation events to the matching [`ApiOperation`].
 pub struct RpcOperationClient {
     registry: Arc<Registry>,
+    _events: CallbackSubscription,
 }
 
 impl RpcOperationClient {
     /// Subscribe to `event_topic` on `node`.
     pub fn new(node: &DdsNode, event_topic: &str) -> Result<Self> {
-        let mut reader =
-            node.subscribe_reader::<RpcRespMsg>(&operation_event_topic(event_topic))?;
         let registry: Arc<Registry> = Arc::new(Mutex::new(HashMap::new()));
-        let weak = Arc::downgrade(&registry);
+        let event_registry = Arc::clone(&registry);
         let topic = event_topic.to_owned();
+        let events = node.subscribe_callback(
+            &operation_event_topic(event_topic),
+            move |msg: RpcRespMsg| dispatch_event(&event_registry, &topic, msg),
+        )?;
 
-        std::thread::spawn(move || {
-            loop {
-                let Some(registry) = weak.upgrade() else {
-                    break;
-                };
-                match reader.take_next_sample() {
-                    Ok(Some(sample)) => dispatch_event(&registry, &topic, sample.into_value()),
-                    Ok(None) => {
-                        drop(registry);
-                        std::thread::sleep(Duration::from_millis(5));
-                    }
-                    Err(_) => {
-                        drop(registry);
-                        std::thread::sleep(Duration::from_millis(10));
-                    }
-                }
-            }
-        });
-
-        Ok(Self { registry })
+        Ok(Self {
+            registry,
+            _events: events,
+        })
     }
 
     /// Start an operation and wait up to `start_timeout` for the service to accept it.

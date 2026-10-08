@@ -62,6 +62,33 @@ SDK 1.7 additions include:
 - audio device enumeration and Bluetooth scan/connect/disconnect/forget APIs;
 - hand-eye calibration start, status, result, and apply APIs.
 
+## Zenoh Transport
+
+Clients speak native DDS by default. With the `zenoh` cargo feature (always enabled in the
+Python wheel) they can instead talk Zenoh, publishing the same CDR payloads on the keys
+[`zenoh-plugin-dds`](https://github.com/eclipse-zenoh/zenoh-plugin-dds) bridges DDS topics to
+(`rt/LocoApiTopicReq`, `rt/LocoApiTopicResp`, ...). This works against the DDS bridge on a robot
+and against simulators that serve those keys directly.
+
+Set `BOOSTER_SDK_ZENOH_ENDPOINT` to switch every client created with default options:
+
+```bash
+BOOSTER_SDK_ZENOH_ENDPOINT=tcp/127.0.0.1:7447 python examples/python/locomotion.py
+```
+
+Or pick the transport explicitly in Rust:
+
+```rust
+use booster_sdk::client::BoosterClient;
+use booster_sdk::dds::{RpcClientOptions, ZenohConfig};
+
+let options = RpcClientOptions::default().with_zenoh(ZenohConfig::client("tcp/127.0.0.1:7447"));
+let client = BoosterClient::with_options(options)?;
+```
+
+Opening a Zenoh session blocks, so inside Tokio create clients on the multi-threaded runtime.
+Raw DDS readers (`DdsNode::subscribe_reader`) are only available on the DDS transport.
+
 ## Contributing
 
 This SDK is in active development. Contributions are welcome! Please open issues or pull requests for bug fixes, features, or documentation improvements.

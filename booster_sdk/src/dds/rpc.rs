@@ -1,7 +1,5 @@
-//! RPC client for high-level API requests over DDS.
+//! RPC client for high-level API requests over DDS or Zenoh.
 
-use futures::StreamExt;
-use rustdds::no_key::DataReaderStream;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,13 +9,15 @@ use uuid::Uuid;
 
 use crate::types::{DdsError, Result, RpcError};
 
-use super::DdsNode;
 use super::messages::{RpcReqMsg, RpcRespMsg};
+use super::node::{DdsConfig, DdsNode, DdsPublisher, SampleStream};
 use super::topics::{LOCO_API_TOPIC, rpc_request_topic, rpc_response_topic};
+use super::transport::{TransportConfig, ZenohConfig};
 
 #[derive(Debug, Clone)]
 pub struct RpcClientOptions {
-    pub domain_id: u16,
+    /// Defaults to [`TransportConfig::from_env`].
+    pub transport: TransportConfig,
     pub default_timeout: Duration,
     pub startup_wait: Duration,
     pub service_topic: String,
@@ -26,7 +26,7 @@ pub struct RpcClientOptions {
 impl Default for RpcClientOptions {
     fn default() -> Self {
         Self {
-            domain_id: 0,
+            transport: TransportConfig::from_env(),
             // 5 s is a safe default for most commands. Mode changes are slow,
             // so change_mode passes its own longer timeout.
             default_timeout: Duration::from_secs(5),
@@ -53,6 +53,24 @@ impl RpcClientOptions {
     }
 
     #[must_use]
+    pub fn with_transport(mut self, transport: TransportConfig) -> Self {
+        self.transport = transport;
+        self
+    }
+
+    /// Use native DDS on the given domain.
+    #[must_use]
+    pub fn with_domain_id(self, domain_id: u16) -> Self {
+        self.with_transport(TransportConfig::Dds(DdsConfig { domain_id }))
+    }
+
+    /// Use Zenoh, e.g. `ZenohConfig::client("tcp/127.0.0.1:7447")`.
+    #[must_use]
+    pub fn with_zenoh(self, config: ZenohConfig) -> Self {
+        self.with_transport(TransportConfig::Zenoh(config))
+    }
+
+    #[must_use]
     pub fn with_default_timeout(mut self, timeout: Duration) -> Self {
         self.default_timeout = timeout;
         self
@@ -72,8 +90,8 @@ impl RpcClientOptions {
 
 pub struct RpcClient {
     node: DdsNode,
-    request_writer: rustdds::no_key::DataWriter<RpcReqMsg>,
-    response_stream: Mutex<DataReaderStream<RpcRespMsg>>,
+    request_writer: DdsPublisher<RpcReqMsg>,
+    response_stream: Mutex<SampleStream<RpcRespMsg>>,
     default_timeout: Duration,
     startup_wait: Duration,
     startup_wait_done: AtomicBool,
@@ -144,21 +162,17 @@ impl RpcClient {
     }
 
     pub fn new(options: RpcClientOptions) -> Result<Self> {
-        let node = DdsNode::new(super::DdsConfig {
-            domain_id: options.domain_id,
-        })?;
+        let node = DdsNode::with_transport(&options.transport)?;
 
         let service_topic = normalize_service_topic(&options.service_topic);
         let request_topic = rpc_request_topic(&service_topic);
         let response_topic = rpc_response_topic(&service_topic);
         let request_writer = node.publisher::<RpcReqMsg>(&request_topic)?;
-        let response_stream = node
-            .subscribe_reader::<RpcRespMsg>(&response_topic)?
-            .async_sample_stream();
+        let response_stream = node.sample_stream::<RpcRespMsg>(&response_topic)?;
 
         Ok(Self {
             node,
-            request_writer: request_writer.into_inner(),
+            request_writer,
             response_stream: Mutex::new(response_stream),
             default_timeout: options.default_timeout,
             startup_wait: options.startup_wait,
@@ -302,7 +316,7 @@ impl RpcClient {
         };
 
         self.request_writer
-            .write(request, None)
+            .write(request)
             .map_err(|err| RpcError::BadRequest(format!("Failed to send request: {err}")))?;
 
         let timeout = timeout.unwrap_or(self.default_timeout);
@@ -311,7 +325,7 @@ impl RpcClient {
         loop {
             let remaining = deadline.saturating_duration_since(Instant::now());
             let response = match tokio::time::timeout(remaining, response_stream.next()).await {
-                Ok(Some(Ok(sample))) => sample.into_value(),
+                Ok(Some(Ok(response))) => response,
                 Ok(Some(Err(err))) => {
                     tracing::warn!(
                         target: "booster_sdk::rpc",
@@ -321,7 +335,7 @@ impl RpcClient {
                         error = %err,
                         "rpc receive error"
                     );
-                    return Err(DdsError::ReceiveFailed(err.to_string()).into());
+                    return Err(err);
                 }
                 Ok(None) => {
                     return Err(
