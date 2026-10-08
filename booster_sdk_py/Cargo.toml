@@ -12,7 +12,7 @@ name = "booster_sdk_bindings"
 crate-type = ["cdylib"]
 
 [dependencies]
-booster_sdk = { workspace = true }
+booster_sdk = { workspace = true, features = ["zenoh"] }
 pyo3 = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

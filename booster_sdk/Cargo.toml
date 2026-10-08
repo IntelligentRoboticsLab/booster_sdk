@@ -18,6 +18,12 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 typed-builder = { workspace = true }
 rustdds = { workspace = true }
+byteorder = { workspace = true, optional = true }
+zenoh = { workspace = true, optional = true }
+
+[features]
+# Talk to the robot over Zenoh, on the keys `zenoh-plugin-dds` bridges DDS topics to.
+zenoh = ["dep:zenoh", "dep:byteorder"]
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
