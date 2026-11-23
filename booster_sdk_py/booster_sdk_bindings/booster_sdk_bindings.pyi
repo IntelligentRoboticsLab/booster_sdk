@@ -220,6 +220,8 @@ class WholeBodyDanceId:
     SHAN_HE_GU_REN_DANCE: WholeBodyDanceId
     GAI_GE_CHUN_FENG_DANCE: WholeBodyDanceId
     MICHAEL_DANCE_1_AND_2: WholeBodyDanceId
+    BOW_AND_ARROW: WholeBodyDanceId
+    CHARLESTON_DANCE: WholeBodyDanceId
 
     def __repr__(self) -> str:
         """Return a stable enum-style representation."""
@@ -1215,20 +1217,1246 @@ class Odometer:
     y: float
     theta: float
 
+class LocoApiId:
+    """Locomotion RPC API ids (for :meth:`BoosterClient.send_api_request` / :meth:`BoosterClient.start_operation`)."""
+
+    CHANGE_MODE: LocoApiId
+    MOVE: LocoApiId
+    ROTATE_HEAD: LocoApiId
+    WAVE_HAND: LocoApiId
+    ROTATE_HEAD_WITH_DIRECTION: LocoApiId
+    LIE_DOWN: LocoApiId
+    GET_UP: LocoApiId
+    MOVE_HAND_END_EFFECTOR: LocoApiId
+    CONTROL_GRIPPER: LocoApiId
+    GET_FRAME_TRANSFORM: LocoApiId
+    SWITCH_HAND_END_EFFECTOR_CONTROL_MODE: LocoApiId
+    CONTROL_DEXTEROUS_HAND: LocoApiId
+    HANDSHAKE: LocoApiId
+    DANCE: LocoApiId
+    GET_MODE: LocoApiId
+    GET_STATUS: LocoApiId
+    PUSH_UP: LocoApiId
+    PLAY_SOUND: LocoApiId
+    STOP_SOUND: LocoApiId
+    GET_ROBOT_INFO: LocoApiId
+    STOP_HAND_END_EFFECTOR: LocoApiId
+    SHOOT: LocoApiId
+    GET_UP_WITH_MODE: LocoApiId
+    ZERO_TORQUE_DRAG: LocoApiId
+    RECORD_TRAJECTORY: LocoApiId
+    REPLAY_TRAJECTORY: LocoApiId
+    WHOLE_BODY_DANCE: LocoApiId
+    UPPER_BODY_CUSTOM_CONTROL: LocoApiId
+    RESET_ODOMETRY: LocoApiId
+    LOAD_CUSTOM_TRAINED_TRAJ: LocoApiId
+    ACTIVATE_CUSTOM_TRAINED_TRAJ: LocoApiId
+    UNLOAD_CUSTOM_TRAINED_TRAJ: LocoApiId
+    ENTER_WBC_GAIT: LocoApiId
+    EXIT_WBC_GAIT: LocoApiId
+    MOVE_DUAL_HAND_END_EFFECTOR: LocoApiId
+    VISUAL_KICK: LocoApiId
+    LION_DANCE_PREPARE: LocoApiId
+    LION_DANCE_START: LocoApiId
+    LION_DANCE_MOVE: LocoApiId
+    SWITCH_GAIT: LocoApiId
+    ROTATE_HEAD_WITH_TIME: LocoApiId
+    GET_SENSORS: LocoApiId
+    GET_HANDS: LocoApiId
+    GET_ROBOT_MODEL: LocoApiId
+    GET_TRAINED_TRAJ_STATUS: LocoApiId
+    HAND_ON_CHEST_GREETING: LocoApiId
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> LocoApiId:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class JointIndex:
+    """Joint indices of the 23-joint T1 layout (:data:`JOINT_CNT`)."""
+
+    HEAD_YAW: JointIndex
+    HEAD_PITCH: JointIndex
+    LEFT_SHOULDER_PITCH: JointIndex
+    LEFT_SHOULDER_ROLL: JointIndex
+    LEFT_ELBOW_PITCH: JointIndex
+    LEFT_ELBOW_YAW: JointIndex
+    RIGHT_SHOULDER_PITCH: JointIndex
+    RIGHT_SHOULDER_ROLL: JointIndex
+    RIGHT_ELBOW_PITCH: JointIndex
+    RIGHT_ELBOW_YAW: JointIndex
+    WAIST: JointIndex
+    LEFT_HIP_PITCH: JointIndex
+    LEFT_HIP_ROLL: JointIndex
+    LEFT_HIP_YAW: JointIndex
+    LEFT_KNEE_PITCH: JointIndex
+    CRANK_UP_LEFT: JointIndex
+    CRANK_DOWN_LEFT: JointIndex
+    RIGHT_HIP_PITCH: JointIndex
+    RIGHT_HIP_ROLL: JointIndex
+    RIGHT_HIP_YAW: JointIndex
+    RIGHT_KNEE_PITCH: JointIndex
+    CRANK_UP_RIGHT: JointIndex
+    CRANK_DOWN_RIGHT: JointIndex
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> JointIndex:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class JointIndexK1:
+    """Joint indices of the 22-joint K1 layout (:data:`JOINT_CNT_K1`)."""
+
+    HEAD_YAW: JointIndexK1
+    HEAD_PITCH: JointIndexK1
+    LEFT_SHOULDER_PITCH: JointIndexK1
+    LEFT_SHOULDER_ROLL: JointIndexK1
+    LEFT_ELBOW_PITCH: JointIndexK1
+    LEFT_ELBOW_YAW: JointIndexK1
+    RIGHT_SHOULDER_PITCH: JointIndexK1
+    RIGHT_SHOULDER_ROLL: JointIndexK1
+    RIGHT_ELBOW_PITCH: JointIndexK1
+    RIGHT_ELBOW_YAW: JointIndexK1
+    LEFT_HIP_PITCH: JointIndexK1
+    LEFT_HIP_ROLL: JointIndexK1
+    LEFT_HIP_YAW: JointIndexK1
+    LEFT_KNEE_PITCH: JointIndexK1
+    CRANK_UP_LEFT: JointIndexK1
+    CRANK_DOWN_LEFT: JointIndexK1
+    RIGHT_HIP_PITCH: JointIndexK1
+    RIGHT_HIP_ROLL: JointIndexK1
+    RIGHT_HIP_YAW: JointIndexK1
+    RIGHT_KNEE_PITCH: JointIndexK1
+    CRANK_UP_RIGHT: JointIndexK1
+    CRANK_DOWN_RIGHT: JointIndexK1
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> JointIndexK1:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class JointIndexWith7DofArm:
+    """Joint indices of the 29-joint T1 7-DoF-arm layout (:data:`JOINT_CNT_7DOF_ARM`)."""
+
+    HEAD_YAW: JointIndexWith7DofArm
+    HEAD_PITCH: JointIndexWith7DofArm
+    LEFT_SHOULDER_PITCH: JointIndexWith7DofArm
+    LEFT_SHOULDER_ROLL: JointIndexWith7DofArm
+    LEFT_ELBOW_PITCH: JointIndexWith7DofArm
+    LEFT_ELBOW_YAW: JointIndexWith7DofArm
+    LEFT_WRIST_PITCH: JointIndexWith7DofArm
+    LEFT_WRIST_YAW: JointIndexWith7DofArm
+    LEFT_HAND_ROLL: JointIndexWith7DofArm
+    RIGHT_SHOULDER_PITCH: JointIndexWith7DofArm
+    RIGHT_SHOULDER_ROLL: JointIndexWith7DofArm
+    RIGHT_ELBOW_PITCH: JointIndexWith7DofArm
+    RIGHT_ELBOW_YAW: JointIndexWith7DofArm
+    RIGHT_WRIST_PITCH: JointIndexWith7DofArm
+    RIGHT_WRIST_YAW: JointIndexWith7DofArm
+    RIGHT_HAND_ROLL: JointIndexWith7DofArm
+    WAIST: JointIndexWith7DofArm
+    LEFT_HIP_PITCH: JointIndexWith7DofArm
+    LEFT_HIP_ROLL: JointIndexWith7DofArm
+    LEFT_HIP_YAW: JointIndexWith7DofArm
+    LEFT_KNEE_PITCH: JointIndexWith7DofArm
+    CRANK_UP_LEFT: JointIndexWith7DofArm
+    CRANK_DOWN_LEFT: JointIndexWith7DofArm
+    RIGHT_HIP_PITCH: JointIndexWith7DofArm
+    RIGHT_HIP_ROLL: JointIndexWith7DofArm
+    RIGHT_HIP_YAW: JointIndexWith7DofArm
+    RIGHT_KNEE_PITCH: JointIndexWith7DofArm
+    CRANK_UP_RIGHT: JointIndexWith7DofArm
+    CRANK_DOWN_RIGHT: JointIndexWith7DofArm
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> JointIndexWith7DofArm:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class CmdType:
+    """Joint space of a :class:`LowCmd` (parallel = ankle cranks, serial = URDF joints)."""
+
+    PARALLEL: CmdType
+    SERIAL: CmdType
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> CmdType:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class RemoteControllerEvent:
+    """Linux input event type of :attr:`RemoteControllerState.event`."""
+
+    NONE: RemoteControllerEvent
+    AXIS: RemoteControllerEvent
+    HAT: RemoteControllerEvent
+    BUTTON_DOWN: RemoteControllerEvent
+    BUTTON_UP: RemoteControllerEvent
+    REMOVE: RemoteControllerEvent
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> RemoteControllerEvent:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class ButtonEventType:
+    """Physical button event type."""
+
+    PRESS_DOWN: ButtonEventType
+    PRESS_UP: ButtonEventType
+    SINGLE_CLICK: ButtonEventType
+    DOUBLE_CLICK: ButtonEventType
+    TRIPLE_CLICK: ButtonEventType
+    LONG_PRESS_START: ButtonEventType
+    LONG_PRESS_HOLD: ButtonEventType
+    LONG_PRESS_END: ButtonEventType
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> ButtonEventType:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class FallDownStateType:
+    """Fall-detection state."""
+
+    IS_READY: FallDownStateType
+    IS_FALLING: FallDownStateType
+    HAS_FALLEN: FallDownStateType
+    IS_GETTING_UP: FallDownStateType
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> FallDownStateType:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class ProneBodyControlPosture:
+    """Posture reported on ``rt/prone_body_control_status``."""
+
+    UNKNOWN: ProneBodyControlPosture
+    INACTIVE: ProneBodyControlPosture
+    PUSH_UP: ProneBodyControlPosture
+    LIE_DOWN: ProneBodyControlPosture
+    SOCCER_LOCOMOTION: ProneBodyControlPosture
+    SOCCER_KICKING: ProneBodyControlPosture
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> ProneBodyControlPosture:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class RobocupBehaviorStatus:
+    """Soccer behavior state (enum; the topic message is :class:`RobocupBehaviorStatusMsg`)."""
+
+    RUNNING: RobocupBehaviorStatus
+    SHOOTING: RobocupBehaviorStatus
+    PASSING: RobocupBehaviorStatus
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> RobocupBehaviorStatus:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class TrainedTrajStatus:
+    """Trained-trajectory status (enum; the topic message is :class:`TrainedTrajStatusMsg`)."""
+
+    IDLE: TrainedTrajStatus
+    RUNNING: TrainedTrajStatus
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> TrainedTrajStatus:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class ArmJoint:
+    """Arm joints controllable by :class:`ArmController` (indices 2-9)."""
+
+    LEFT_PITCH: ArmJoint
+    LEFT_ROLL: ArmJoint
+    LEFT_YAW: ArmJoint
+    LEFT_ELBOW: ArmJoint
+    RIGHT_PITCH: ArmJoint
+    RIGHT_ROLL: ArmJoint
+    RIGHT_YAW: ArmJoint
+    RIGHT_ELBOW: ArmJoint
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> ArmJoint:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class ApiOperationEventType:
+    """Kind of asynchronous-operation event."""
+
+    UNKNOWN: ApiOperationEventType
+    PROGRESS: ApiOperationEventType
+    FINISHED: ApiOperationEventType
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> ApiOperationEventType:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class ApiOperationResultCode:
+    """Final outcome of an asynchronous operation."""
+
+    UNKNOWN: ApiOperationResultCode
+    SUCCEEDED: ApiOperationResultCode
+    ABORTED: ApiOperationResultCode
+    CANCELED: ApiOperationResultCode
+    REJECTED: ApiOperationResultCode
+    TIMEOUT: ApiOperationResultCode
+
+    @property
+    def name(self) -> str: ...
+    @staticmethod
+    def from_int(value: int) -> ApiOperationResultCode:
+        """Convert a raw value; raises ``ValueError`` if unknown."""
+        ...
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+JOINT_CNT: int
+"""Joints in the T1 layout (:class:`JointIndex`)."""
+JOINT_CNT_K1: int
+"""Joints in the K1 layout (:class:`JointIndexK1`)."""
+JOINT_CNT_7DOF_ARM: int
+"""Joints in the T1 7-DoF-arm layout (:class:`JointIndexWith7DofArm`)."""
+
+# --- Robot-state topic messages (read-only; from BoosterClient.subscribe_*) ---
+
+class RobotDdsJointStatus:
+    """Joint health entry of :class:`RobotStatusDdsMsg`."""
+
+    @property
+    def name(self) -> str: ...
+    @property
+    def index(self) -> int: ...
+    @property
+    def is_connected(self) -> bool: ...
+    @property
+    def temperature(self) -> int: ...
+    @property
+    def is_limited(self) -> int: ...
+    @property
+    def status_code(self) -> int: ...
+    @property
+    def temperature_level(self) -> int: ...
+
+class RobotDdsImuStatus:
+    """IMU health entry of :class:`RobotStatusDdsMsg`."""
+
+    @property
+    def name(self) -> str: ...
+    @property
+    def index(self) -> int: ...
+    @property
+    def is_connected(self) -> bool: ...
+    @property
+    def status_code(self) -> int: ...
+
+class RobotDdsBatteryStatus:
+    """Battery health entry of :class:`RobotStatusDdsMsg`."""
+
+    @property
+    def name(self) -> str: ...
+    @property
+    def temperature(self) -> float: ...
+    @property
+    def soc(self) -> float: ...
+    @property
+    def voltage(self) -> float: ...
+    @property
+    def status_code(self) -> int: ...
+    @property
+    def status_level(self) -> int: ...
+
+class RobotStatusDdsMsg:
+    """Device health (``rt/device_gateway``)."""
+
+    @property
+    def joint_vec(self) -> list[RobotDdsJointStatus]: ...
+    @property
+    def imu_vec(self) -> list[RobotDdsImuStatus]: ...
+    @property
+    def battery_vec(self) -> list[RobotDdsBatteryStatus]: ...
+
+class MotionState:
+    """Motion state (raw :class:`RobotMode` values)."""
+
+    @property
+    def current_mode(self) -> int: ...
+    @property
+    def target_mode(self) -> int: ...
+    @property
+    def is_transitioning(self) -> bool: ...
+
+class BatteryState:
+    """Battery state."""
+
+    @property
+    def voltage(self) -> float: ...
+    @property
+    def current(self) -> float: ...
+    @property
+    def soc(self) -> float: ...
+    @property
+    def average_voltage(self) -> float: ...
+
+class ButtonEventMsg:
+    """Physical button event."""
+
+    @property
+    def button(self) -> int: ...
+    @property
+    def event(self) -> ButtonEventType: ...
+
+class RemoteControllerState:
+    """Remote controller (gamepad) state."""
+
+    @property
+    def event(self) -> int:
+        """Raw :class:`RemoteControllerEvent` value."""
+        ...
+    @property
+    def lx(self) -> float: ...
+    @property
+    def ly(self) -> float: ...
+    @property
+    def rx(self) -> float: ...
+    @property
+    def ry(self) -> float: ...
+    @property
+    def a(self) -> bool: ...
+    @property
+    def b(self) -> bool: ...
+    @property
+    def x(self) -> bool: ...
+    @property
+    def y(self) -> bool: ...
+    @property
+    def lb(self) -> bool: ...
+    @property
+    def rb(self) -> bool: ...
+    @property
+    def lt(self) -> bool: ...
+    @property
+    def rt(self) -> bool: ...
+    @property
+    def ls(self) -> bool: ...
+    @property
+    def rs(self) -> bool: ...
+    @property
+    def back(self) -> bool: ...
+    @property
+    def start(self) -> bool: ...
+    @property
+    def hat_c(self) -> bool: ...
+    @property
+    def hat_u(self) -> bool: ...
+    @property
+    def hat_d(self) -> bool: ...
+    @property
+    def hat_l(self) -> bool: ...
+    @property
+    def hat_r(self) -> bool: ...
+    @property
+    def hat_lu(self) -> bool: ...
+    @property
+    def hat_ld(self) -> bool: ...
+    @property
+    def hat_ru(self) -> bool: ...
+    @property
+    def hat_rd(self) -> bool: ...
+    @property
+    def reserved(self) -> int: ...
+    def event_kind(self) -> RemoteControllerEvent | None:
+        """Decoded ``event``, or ``None`` if unknown."""
+        ...
+
+class RobotProcessStatus:
+    """Process state entry of :class:`RobotProcessStateMsg`."""
+
+    @property
+    def name(self) -> str: ...
+    @property
+    def pid(self) -> int: ...
+    @property
+    def status(self) -> int: ...
+
+class RobotProcessStateMsg:
+    """Robot process states."""
+
+    @property
+    def process_vec(self) -> list[RobotProcessStatus]: ...
+
+class BinaryData:
+    """Binary payload (video stream)."""
+
+    @property
+    def data(self) -> bytes: ...
+    @property
+    def timestamp(self) -> int: ...
+    @property
+    def sequence_num(self) -> int: ...
+    @property
+    def encoding(self) -> str: ...
+
+class FallDownState:
+    """Fall and recovery state (``rt/fall_down``)."""
+
+    @property
+    def fall_down_state(self) -> FallDownStateType: ...
+    @property
+    def is_recovery_available(self) -> bool: ...
+
+class RobotStatesMsg:
+    """Mode, body control and actions (``rt/robot_states``)."""
+
+    @property
+    def current_mode(self) -> int: ...
+    @property
+    def current_body_control(self) -> int: ...
+    @property
+    def current_actions(self) -> list[int]: ...
+    def mode(self) -> RobotMode | None:
+        """Decoded ``current_mode``, or ``None`` if unknown."""
+        ...
+    def body_control(self) -> BodyControl | None:
+        """Decoded ``current_body_control``, or ``None`` if unknown."""
+        ...
+    def actions(self) -> list[Action]:
+        """Decoded ``current_actions`` (unknown values are skipped)."""
+        ...
+
+class ProneBodyControlStatus:
+    """Prone-body / visual-kick status."""
+
+    @property
+    def posture(self) -> int: ...
+    def posture_kind(self) -> ProneBodyControlPosture | None:
+        """Decoded ``posture``, or ``None`` if unknown."""
+        ...
+
+class RobotReplayTrajID:
+    """Id of the recorded trajectory being replayed."""
+
+    @property
+    def id(self) -> str: ...
+
+class TrainedTrajStatusMsg:
+    """Trained-trajectory status message (``rt/trained_traj_status``).
+
+    Named ``...Msg`` because :class:`TrainedTrajStatus` is the status enum.
+    """
+
+    @property
+    def status(self) -> int: ...
+    @property
+    def traj_id(self) -> str: ...
+    def status_kind(self) -> TrainedTrajStatus | None:
+        """Decoded ``status``, or ``None`` if unknown."""
+        ...
+
+class RobocupBehaviorStatusMsg:
+    """Soccer behavior status message (``rt/robocup_behavior_status``).
+
+    Named ``...Msg`` because :class:`RobocupBehaviorStatus` is the status enum.
+    """
+
+    @property
+    def status(self) -> int: ...
+    def status_kind(self) -> RobocupBehaviorStatus | None:
+        """Decoded ``status``, or ``None`` if unknown."""
+        ...
+
+class GetTrainedTrajStatusResponse:
+    """Response of :meth:`BoosterClient.get_trained_traj_status`."""
+
+    def __init__(self, status: int, traj_id: str = "") -> None: ...
+    @property
+    def status(self) -> int: ...
+    @property
+    def traj_id(self) -> str: ...
+    def is_running(self) -> bool: ...
+    def status_enum(self) -> TrainedTrajStatus | None:
+        """Decoded ``status``, or ``None`` if unknown."""
+        ...
+
+class HandReplyParam:
+    """Per-finger feedback of :class:`HandReplyData`."""
+
+    @property
+    def angle(self) -> int: ...
+    @property
+    def force(self) -> int: ...
+    @property
+    def current(self) -> int: ...
+    @property
+    def error(self) -> int: ...
+    @property
+    def status(self) -> int: ...
+    @property
+    def temp(self) -> int: ...
+    @property
+    def seq(self) -> int: ...
+
+class HandReplyData:
+    """Dexterous-hand actuator feedback (``rt/booster_hand_data``)."""
+
+    @property
+    def hand_data(self) -> list[HandReplyParam]: ...
+    @property
+    def hand_index(self) -> int:
+        """0 = left, 1 = right (see :class:`Hand`)."""
+        ...
+    @property
+    def hand_type(self) -> int:
+        """Raw :class:`BoosterHandType` value."""
+        ...
+
+class HandTouchParam:
+    """Raw touch-sensor arrays per finger."""
+
+    @property
+    def finger_one(self) -> bytes: ...
+    @property
+    def finger_two(self) -> bytes: ...
+    @property
+    def finger_three(self) -> bytes: ...
+    @property
+    def finger_four(self) -> bytes: ...
+    @property
+    def finger_five(self) -> bytes: ...
+    @property
+    def finger_palm(self) -> bytes: ...
+
+class HandTouchData:
+    """Hand touch-sensor data (``rt/booster_hand_touch_data``)."""
+
+    @property
+    def touch_data(self) -> HandTouchParam: ...
+    @property
+    def hand_index(self) -> int: ...
+    @property
+    def hand_type(self) -> int: ...
+
+# --- Low-level control (rt/joint_ctrl, rt/low_state) ---
+
+class MotorCmd:
+    """Command for one motor.
+
+    Torque = ``tau + kp * (q - q_measured) + kd * (dq - dq_measured)``.
+    """
+
+    mode: int
+    q: float
+    dq: float
+    tau: float
+    kp: float
+    kd: float
+    weight: float
+
+    def __init__(
+        self,
+        mode: int = 0,
+        q: float = 0.0,
+        dq: float = 0.0,
+        tau: float = 0.0,
+        kp: float = 0.0,
+        kd: float = 0.0,
+        weight: float = 0.0,
+    ) -> None: ...
+    def to_json(self) -> str: ...
+    @staticmethod
+    def from_json(json: str) -> MotorCmd: ...
+
+class LowCmd:
+    """Low-level joint command (``rt/joint_ctrl``).
+
+    ``motor_cmd`` must have one entry per joint of the robot's layout
+    (:data:`JOINT_CNT`, :data:`JOINT_CNT_K1` or :data:`JOINT_CNT_7DOF_ARM`).
+    It is a regular list of :class:`MotorCmd` objects, so
+    ``cmd.motor_cmd[i].q = 0.3`` edits the command in place.
+    """
+
+    cmd_type: CmdType
+    motor_cmd: list[MotorCmd]
+
+    def __init__(
+        self,
+        cmd_type: CmdType = ...,
+        joint_count: int = 0,
+        motor_cmd: list[MotorCmd] | None = None,
+    ) -> None:
+        """Create ``joint_count`` zeroed motor commands (or use ``motor_cmd``).
+
+        ``cmd_type`` defaults to ``CmdType.PARALLEL``.
+        """
+        ...
+    def __len__(self) -> int: ...
+
+class LowCmdPublisher:
+    """Publisher for :class:`LowCmd` on ``rt/joint_ctrl``."""
+
+    def write(self, cmd: LowCmd) -> None: ...
+    def matched_subscriptions(self) -> int:
+        """Number of matched subscribers seen so far."""
+        ...
+
+class ImuState:
+    """IMU sample of :class:`LowState`."""
+
+    @property
+    def rpy(self) -> list[float]:
+        """Roll, pitch, yaw (rad)."""
+        ...
+    @property
+    def gyro(self) -> list[float]:
+        """Angular velocity (rad/s)."""
+        ...
+    @property
+    def acc(self) -> list[float]:
+        """Linear acceleration (m/s^2)."""
+        ...
+
+class MotorState:
+    """State of one motor."""
+
+    @property
+    def mode(self) -> int: ...
+    @property
+    def q(self) -> float: ...
+    @property
+    def dq(self) -> float: ...
+    @property
+    def ddq(self) -> float: ...
+    @property
+    def tau_est(self) -> float: ...
+    @property
+    def temperature(self) -> int: ...
+    @property
+    def lost(self) -> int: ...
+    @property
+    def reserve(self) -> list[int]: ...
+
+class LowState:
+    """Low-level motor and IMU state (``rt/low_state``)."""
+
+    @property
+    def imu_state(self) -> ImuState: ...
+    @property
+    def motor_state_parallel(self) -> list[MotorState]: ...
+    @property
+    def motor_state_serial(self) -> list[MotorState]: ...
+
+# --- ROS 2 messages (rt/kick_ball, rt/tf) ---
+
+class Time:
+    """``builtin_interfaces/Time``."""
+
+    sec: int
+    nanosec: int
+
+    def __init__(self, sec: int = 0, nanosec: int = 0) -> None: ...
+    @staticmethod
+    def now() -> Time:
+        """Current wall-clock time (UNIX epoch)."""
+        ...
+    def as_secs_f64(self) -> float: ...
+    def to_json(self) -> str: ...
+    @staticmethod
+    def from_json(json: str) -> Time: ...
+
+class Header:
+    """``std_msgs/Header``. ``stamp`` is held by reference."""
+
+    stamp: Time
+    frame_id: str
+
+    def __init__(self, stamp: Time | None = None, frame_id: str = "") -> None: ...
+
+class Kick:
+    """Kick reference command (``rt/kick_ball``, K1 / T1). ``header`` is held by reference."""
+
+    header: Header
+    x: float
+    y: float
+    dir: float
+    goal_x: float
+    goal_y: float
+    robot_theta_to_field: float
+    power: float
+
+    def __init__(
+        self,
+        header: Header | None = None,
+        x: float = 0.0,
+        y: float = 0.0,
+        dir: float = 0.0,
+        goal_x: float = 0.0,
+        goal_y: float = 0.0,
+        robot_theta_to_field: float = 0.0,
+        power: float = 0.0,
+    ) -> None: ...
+
+class KickPublisher:
+    """Publisher for :class:`Kick` on ``rt/kick_ball``."""
+
+    def write(self, kick: Kick) -> None: ...
+    def matched_subscriptions(self) -> int:
+        """Number of matched subscribers seen so far."""
+        ...
+
+class RosQuaternion:
+    """``geometry_msgs/Quaternion`` (f64; :class:`Quaternion` is the RPC type)."""
+
+    @property
+    def x(self) -> float: ...
+    @property
+    def y(self) -> float: ...
+    @property
+    def z(self) -> float: ...
+    @property
+    def w(self) -> float: ...
+
+class RosTransform:
+    """``geometry_msgs/Transform`` (:class:`Transform` is the RPC type)."""
+
+    @property
+    def translation(self) -> Vector3: ...
+    @property
+    def rotation(self) -> RosQuaternion: ...
+
+class TransformStamped:
+    """``geometry_msgs/TransformStamped``."""
+
+    @property
+    def header(self) -> Header:
+        """A copy of the header."""
+        ...
+    @property
+    def child_frame_id(self) -> str: ...
+    @property
+    def transform(self) -> RosTransform: ...
+
+class TFMessage:
+    """Transform tree (``rt/tf``)."""
+
+    @property
+    def transforms(self) -> list[TransformStamped]: ...
+
+# --- Asynchronous operations ---
+
+class ApiOperationProgress:
+    """Progress event of an :class:`ApiOperation`."""
+
+    @property
+    def event_type(self) -> ApiOperationEventType: ...
+    @property
+    def operation_id(self) -> str: ...
+    @property
+    def api_id(self) -> int: ...
+    @property
+    def status(self) -> int: ...
+    @property
+    def message(self) -> str: ...
+    @property
+    def body(self) -> str: ...
+
+class ApiOperationResult:
+    """Final result of an :class:`ApiOperation`."""
+
+    @property
+    def event_type(self) -> ApiOperationEventType: ...
+    @property
+    def code(self) -> ApiOperationResultCode: ...
+    @property
+    def operation_id(self) -> str: ...
+    @property
+    def api_id(self) -> int: ...
+    @property
+    def status(self) -> int: ...
+    @property
+    def message(self) -> str: ...
+    @property
+    def body(self) -> str: ...
+    def is_success(self) -> bool:
+        """``code == SUCCEEDED`` and ``status == 0``."""
+        ...
+    def body_or_raise(self) -> str:
+        """Return ``body`` on success, else raise the matching :class:`RpcError`."""
+        ...
+
+class ApiOperation:
+    """A started locomotion operation (:meth:`BoosterClient.start_operation`).
+
+    ``next_event`` / ``wait`` block with the GIL released and honour Ctrl-C.
+    Dropping the object stops event delivery but does not cancel the
+    operation on the robot; call :meth:`cancel` for that.
+    """
+
+    @property
+    def operation_id(self) -> str: ...
+    @property
+    def api_id(self) -> int: ...
+    @property
+    def done(self) -> bool:
+        """Whether the final result has been received."""
+        ...
+    def next_event(
+        self, timeout: float | None = None
+    ) -> ApiOperationProgress | ApiOperationResult | None:
+        """Next event; ``None`` on timeout or after the final result."""
+        ...
+    def wait(self, timeout: float | None = None) -> ApiOperationResult:
+        """Wait for the final result, skipping progress events.
+
+        Raises :class:`RpcTimeoutError` on timeout and :class:`RpcStatusError`
+        if the result was already consumed (event stream closed).
+        """
+        ...
+    def cancel(self) -> None:
+        """Ask the service to cancel; the result (usually ``CANCELED``) still arrives."""
+        ...
+
+# --- Controllers ---
+
+class MoveController:
+    """Odometry-based point-to-point locomotion (C++ ``b1::MoveController``).
+
+    Requires a walking mode. Construction blocks ~2-7 s: it waits up to 5 s
+    for odometry (raising :class:`BoosterSdkError` if none arrives), then
+    resets odometry. Motions block with the GIL released and have no overall
+    timeout; Ctrl-C cancels the motion, sends a stop and raises
+    ``KeyboardInterrupt``. Use as a context manager (or call :meth:`close`)
+    to stop the robot when done.
+
+    Pass either an existing ``client`` or ``robot_name``/``network``/``domain_id``.
+    """
+
+    def __init__(
+        self,
+        *,
+        client: BoosterClient | None = None,
+        robot_name: str | None = None,
+        network: str | list[str] | None = None,
+        domain_id: int | None = None,
+    ) -> None: ...
+    @property
+    def client(self) -> BoosterClient: ...
+    @property
+    def closed(self) -> bool: ...
+    def pose(self) -> tuple[float, float, float]:
+        """Latest odometry pose ``(x, y, theta)``."""
+        ...
+    def move_to_target(self, x: float, y: float, vel: float) -> None:
+        """Walk to odometry-frame ``(x, y)`` with speed limit ``vel`` (m/s)."""
+        ...
+    def move_to_relative(self, dx: float, dy: float, vel: float) -> None:
+        """Walk ``(dx, dy)`` relative to the current position."""
+        ...
+    def turn_around(self, angle: float, vel: float) -> None:
+        """Turn in place by ``|angle|`` rad at ``|vel|`` rad/s.
+
+        As in the C++ SDK, a positive ``angle`` commands a negative yaw rate.
+        """
+        ...
+    def stop(self) -> None:
+        """Command zero velocity."""
+        ...
+    def close(self) -> None:
+        """Stop and release the odometry subscription (idempotent)."""
+        ...
+    def __enter__(self) -> MoveController: ...
+    def __exit__(self, *args: object) -> None: ...
+
+class ArmController:
+    """Interpolated arm-joint control via ``rt/joint_ctrl`` (C++ ``b1::ArmController``).
+
+    Construction enables upper-body custom control and blocks ~2.5-7.5 s;
+    :meth:`close` (or leaving the ``with`` block) disables it again.
+    ``joint_count`` is the low-level layout size (``JOINT_CNT_K1`` on a K1).
+    """
+
+    def __init__(
+        self,
+        *,
+        joint_count: int = ...,
+        client: BoosterClient | None = None,
+        robot_name: str | None = None,
+        network: str | list[str] | None = None,
+        domain_id: int | None = None,
+    ) -> None:
+        """``joint_count`` defaults to :data:`JOINT_CNT`."""
+        ...
+    @property
+    def client(self) -> BoosterClient: ...
+    @property
+    def closed(self) -> bool: ...
+    def joint_positions(self) -> list[float]:
+        """Latest measured joint positions (parallel layout)."""
+        ...
+    def control_arm(
+        self, joint: ArmJoint | int, target_rad: float, duration_ms: float
+    ) -> ArmController:
+        """Queue a move (min 50 ms); returns ``self`` for chaining.
+
+        Raises ``ValueError`` for joints outside 2-9. Nothing moves until
+        :meth:`finish`.
+        """
+        ...
+    def finish(self) -> None:
+        """Execute the queued moves at 100 Hz (GIL released).
+
+        Ctrl-C stops publishing and raises ``KeyboardInterrupt`` (the queue is kept).
+        """
+        ...
+    def close(self) -> None:
+        """Disable upper-body custom control and close the channels (idempotent)."""
+        ...
+    def __enter__(self) -> ArmController: ...
+    def __exit__(self, *args: object) -> None: ...
+
 class BoosterClient:
     """High-level locomotion and body-control client for the robot."""
 
-    def __init__(self, startup_wait_sec: float | None = ...) -> None:
+    def __init__(
+        self,
+        startup_wait_sec: float | None = None,
+        *,
+        robot_name: str | None = None,
+        network: str | list[str] | None = None,
+        domain_id: int | None = None,
+    ) -> None:
         """Create a client.
 
         Args:
             startup_wait_sec: Optional one-time wait before the first RPC call.
                 ``None`` uses SDK default startup wait.
+            robot_name: Target ``rt/LocoApiTopic/<robot_name>`` (C++
+                ``Init(robot_name)``).
+            network: ``"localhost"``, ``"all"`` or interface names / IP
+                addresses (a list or a comma-separated string).
+            domain_id: DDS domain id.
+
+        Domain id and network default to ``BOOSTER_DOMAIN_ID`` /
+        ``BOOSTER_DDS_NETWORK`` (domain 0, loopback only when unset).
         """
         ...
 
     def subscribe_odometer(self) -> Subscription:
         """Subscribe to planar odometry; samples are :class:`Odometer`."""
+        ...
+
+    def move_command(self, vx: float, vy: float, vyaw: float) -> None:
+        """Send a fire-and-forget velocity command (C++ ``MoveCommand``).
+
+        Does not wait for a response (suited to control loops). Raises
+        :class:`RpcTimeoutError` if the service has not been discovered yet.
+        """
+        ...
+
+    def wait_for_service(
+        self, timeout_sec: float, require_response_path: bool = False
+    ) -> bool:
+        """Wait until the locomotion service is discovered (C++ ``WaitForService``)."""
+        ...
+
+    def get_trained_traj_status(self) -> GetTrainedTrajStatusResponse:
+        """Query trained-trajectory execution status."""
+        ...
+
+    def hand_on_chest_greeting(self, up: bool) -> None:
+        """Raise (``up=True``) or lower the hand-on-chest greeting (T2 only)."""
+        ...
+
+    def send_api_request(self, api_id: LocoApiId | int, param: str = "") -> str:
+        """Send a raw request and return the raw response body."""
+        ...
+
+    def start_operation(
+        self,
+        api_id: LocoApiId | int,
+        param: str = "",
+        start_timeout_sec: float = 1.0,
+    ) -> ApiOperation:
+        """Start a request as an asynchronous operation (SDK 1.8).
+
+        Returns once the service accepted it; progress and the final result
+        arrive through the returned :class:`ApiOperation`.
+        """
+        ...
+
+    def cancel_operation(self, operation: ApiOperation) -> None:
+        """Cancel an operation (same as ``operation.cancel()``)."""
+        ...
+
+    def publish_light_control(self, pixels: list[tuple[int, int, int]]) -> None:
+        """Publish an LED strip command (one ``(r, g, b)`` tuple per LED)."""
+        ...
+
+    def enter_safe_mode(self, data: bytes = b"") -> None:
+        """Publish a safe-mode message with a raw payload."""
+        ...
+
+    def low_cmd_publisher(self) -> LowCmdPublisher:
+        """Create a publisher for low-level joint commands (``rt/joint_ctrl``).
+
+        Only honoured in custom mode / upper-body custom control; the command's
+        joint layout must match the robot model.
+        """
+        ...
+
+    def kick_publisher(self) -> KickPublisher:
+        """Create a publisher for kick reference commands (``rt/kick_ball``)."""
+        ...
+
+    def subscribe_device_gateway(self) -> Subscription:
+        """Device health; samples are :class:`RobotStatusDdsMsg`."""
+        ...
+
+    def subscribe_motion_state(self) -> Subscription:
+        """Samples are :class:`MotionState`."""
+        ...
+
+    def subscribe_battery_state(self) -> Subscription:
+        """Samples are :class:`BatteryState`."""
+        ...
+
+    def subscribe_button_events(self) -> Subscription:
+        """Samples are :class:`ButtonEventMsg`."""
+        ...
+
+    def subscribe_remote_controller(self) -> Subscription:
+        """Samples are :class:`RemoteControllerState`."""
+        ...
+
+    def subscribe_process_state(self) -> Subscription:
+        """Samples are :class:`RobotProcessStateMsg`."""
+        ...
+
+    def subscribe_video_stream(self) -> Subscription:
+        """Samples are :class:`BinaryData`."""
+        ...
+
+    def subscribe_low_state(self) -> Subscription:
+        """Motor and IMU state (``rt/low_state``); samples are :class:`LowState`."""
+        ...
+
+    def subscribe_fall_down(self) -> Subscription:
+        """Samples are :class:`FallDownState`."""
+        ...
+
+    def subscribe_robot_states(self) -> Subscription:
+        """Samples are :class:`RobotStatesMsg`."""
+        ...
+
+    def subscribe_prone_body_control_status(self) -> Subscription:
+        """Samples are :class:`ProneBodyControlStatus`."""
+        ...
+
+    def subscribe_robot_replay_traj_id(self) -> Subscription:
+        """Samples are :class:`RobotReplayTrajID`."""
+        ...
+
+    def subscribe_trained_traj_status(self) -> Subscription:
+        """Samples are :class:`TrainedTrajStatusMsg`."""
+        ...
+
+    def subscribe_robocup_behavior_status(self) -> Subscription:
+        """Samples are :class:`RobocupBehaviorStatusMsg` (K1 / T1)."""
+        ...
+
+    def subscribe_hand_data(self) -> Subscription:
+        """Samples are :class:`HandReplyData` (needs a compatible hand)."""
+        ...
+
+    def subscribe_hand_touch_data(self) -> Subscription:
+        """Samples are :class:`HandTouchData` (needs a touch hand)."""
+        ...
+
+    def subscribe_tf(self) -> Subscription:
+        """Transform tree (``rt/tf``); samples are :class:`TFMessage`."""
         ...
 
     def change_mode(self, mode: RobotMode) -> None:

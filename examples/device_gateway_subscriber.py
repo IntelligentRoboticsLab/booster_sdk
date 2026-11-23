@@ -1,65 +1,17 @@
-"""Subscribe to device gateway state over DDS with CycloneDDS.
+"""Print joint temperatures from the device gateway (``rt/device_gateway``).
 
-Requirements:
-- `pip install cyclonedds`
+Set ``BOOSTER_DDS_NETWORK`` / ``BOOSTER_DOMAIN_ID`` (or pass ``network=`` /
+``domain_id=`` to ``BoosterClient``) to reach the robot.
 """
 
-from dataclasses import dataclass
-from typing import List
-
-from cyclonedds.domain import DomainParticipant
-from cyclonedds.sub import DataReader
-from cyclonedds.topic import Topic
-
-
-@dataclass
-class RobotDdsJointStatus:
-    name: str
-    index: int
-    is_connected: bool
-    temperature: int
-    is_limited: int
-    status_code: int
-    temperature_level: int
-
-
-@dataclass
-class RobotDdsImuStatus:
-    name: str
-    index: int
-    is_connected: bool
-    status_code: int
-
-
-@dataclass
-class RobotDdsBatteryStatus:
-    name: str
-    temperature: float
-    soc: float
-    voltage: float
-    status_code: int
-    status_level: int
-
-
-@dataclass
-class RobotStatusDdsMsg:
-    joint_vec: List[RobotDdsJointStatus]
-    imu_vec: List[RobotDdsImuStatus]
-    battery_vec: List[RobotDdsBatteryStatus]
+from booster_sdk.client.booster import BoosterClient
 
 
 def main() -> None:
-    participant = DomainParticipant(0)
-    topic = Topic(participant, "rt/device_gateway", RobotStatusDdsMsg)
-    reader = DataReader(participant, topic)
-
-    print("Listening for rt/device_gateway...")
-    while True:
-        samples = reader.take(10)
-        for sample in samples:
-            if not sample.data:
-                continue
-            msg = sample.data
+    client = BoosterClient()
+    print("Listening for rt/device_gateway... (Ctrl-C to stop)")
+    with client.subscribe_device_gateway() as subscription:
+        for msg in subscription:
             for joint in msg.joint_vec:
                 print(f"{joint.name}: {joint.temperature}C")
 

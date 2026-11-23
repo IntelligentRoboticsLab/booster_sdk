@@ -11,13 +11,113 @@ use booster_sdk::{
         Transform, VisualKickVersion, WholeBodyDanceId,
     },
 };
-use pyo3::{Bound, prelude::*, types::PyModule};
+use pyo3::{
+    Bound,
+    exceptions::{PyTypeError, PyValueError},
+    prelude::*,
+    types::PyModule,
+};
 
+use super::{
+    low_level::{PyKickPublisher, PyLowCmdPublisher, PyLowState, PyTFMessage},
+    operation::PyApiOperation,
+    robot_state::{
+        PyBatteryState, PyBinaryData, PyButtonEventMsg, PyFallDownState,
+        PyGetTrainedTrajStatusResponse, PyHandReplyData, PyHandTouchData, PyMotionState,
+        PyProneBodyControlStatus, PyRemoteControllerState, PyRobocupBehaviorStatusMsg,
+        PyRobotProcessStateMsg, PyRobotReplayTrajID, PyRobotStatesMsg, PyRobotStatusDdsMsg,
+        PyTrainedTrajStatusMsg,
+    },
+};
 use crate::{
-    json_value_to_py, runtime::wait_for_future, startup_wait_from_seconds,
+    json_value_to_py, macros::py_int_enum, options::rpc_options, runtime::wait_for_future,
     subscription::PySubscription, to_py_err,
 };
-use booster_sdk::dds::Odometer;
+use booster_sdk::dds::{
+    BatteryState, BinaryData, ButtonEventMsg, FallDownState, HandReplyData, HandTouchData,
+    LightControlMsg, LightPixel, LowState, MotionState, Odometer, ProneBodyControlStatus,
+    RemoteControllerState, RobocupBehaviorStatus, RobotProcessStateMsg, RobotReplayTrajID,
+    RobotStatesMsg, RobotStatusDdsMsg, SafeMode, TFMessage, TrainedTrajStatus,
+};
+use booster_sdk::types::LocoApiId;
+
+py_int_enum!(PyLocoApiId, "LocoApiId", LocoApiId, i32, {
+    CHANGE_MODE => ChangeMode,
+    MOVE => Move,
+    ROTATE_HEAD => RotateHead,
+    WAVE_HAND => WaveHand,
+    ROTATE_HEAD_WITH_DIRECTION => RotateHeadWithDirection,
+    LIE_DOWN => LieDown,
+    GET_UP => GetUp,
+    MOVE_HAND_END_EFFECTOR => MoveHandEndEffector,
+    CONTROL_GRIPPER => ControlGripper,
+    GET_FRAME_TRANSFORM => GetFrameTransform,
+    SWITCH_HAND_END_EFFECTOR_CONTROL_MODE => SwitchHandEndEffectorControlMode,
+    CONTROL_DEXTEROUS_HAND => ControlDexterousHand,
+    HANDSHAKE => Handshake,
+    DANCE => Dance,
+    GET_MODE => GetMode,
+    GET_STATUS => GetStatus,
+    PUSH_UP => PushUp,
+    PLAY_SOUND => PlaySound,
+    STOP_SOUND => StopSound,
+    GET_ROBOT_INFO => GetRobotInfo,
+    STOP_HAND_END_EFFECTOR => StopHandEndEffector,
+    SHOOT => Shoot,
+    GET_UP_WITH_MODE => GetUpWithMode,
+    ZERO_TORQUE_DRAG => ZeroTorqueDrag,
+    RECORD_TRAJECTORY => RecordTrajectory,
+    REPLAY_TRAJECTORY => ReplayTrajectory,
+    WHOLE_BODY_DANCE => WholeBodyDance,
+    UPPER_BODY_CUSTOM_CONTROL => UpperBodyCustomControl,
+    RESET_ODOMETRY => ResetOdometry,
+    LOAD_CUSTOM_TRAINED_TRAJ => LoadCustomTrainedTraj,
+    ACTIVATE_CUSTOM_TRAINED_TRAJ => ActivateCustomTrainedTraj,
+    UNLOAD_CUSTOM_TRAINED_TRAJ => UnloadCustomTrainedTraj,
+    ENTER_WBC_GAIT => EnterWbcGait,
+    EXIT_WBC_GAIT => ExitWbcGait,
+    MOVE_DUAL_HAND_END_EFFECTOR => MoveDualHandEndEffector,
+    VISUAL_KICK => VisualKick,
+    LION_DANCE_PREPARE => LionDancePrepare,
+    LION_DANCE_START => LionDanceStart,
+    LION_DANCE_MOVE => LionDanceMove,
+    SWITCH_GAIT => SwitchGait,
+    ROTATE_HEAD_WITH_TIME => RotateHeadWithTime,
+    GET_SENSORS => GetSensors,
+    GET_HANDS => GetHands,
+    GET_ROBOT_MODEL => GetRobotModel,
+    GET_TRAINED_TRAJ_STATUS => GetTrainedTrajStatus,
+    HAND_ON_CHEST_GREETING => HandOnChestGreeting,
+});
+
+/// Convert a raw API id (int or `LocoApiId`) to a `LocoApiId`.
+fn loco_api_id(api_id: i32) -> PyResult<LocoApiId> {
+    LocoApiId::try_from(api_id)
+        .map_err(|_| PyValueError::new_err(format!("unknown LocoApiId value: {api_id}")))
+}
+
+/// Validate a timeout in seconds.
+fn duration_from_secs(name: &str, seconds: f64) -> PyResult<std::time::Duration> {
+    if !seconds.is_finite() || seconds < 0.0 {
+        return Err(PyValueError::new_err(format!(
+            "{name} must be a finite number >= 0"
+        )));
+    }
+    Ok(std::time::Duration::from_secs_f64(seconds))
+}
+
+/// Parse LED pixels: an iterable of `(r, g, b)` tuples.
+fn light_pixels(pixels: &Bound<'_, PyAny>) -> PyResult<Vec<LightPixel>> {
+    pixels
+        .try_iter()?
+        .map(|item| {
+            let (r, g, b): (u8, u8, u8) = item?.extract().map_err(|_| {
+                PyTypeError::new_err("pixels must be (r, g, b) tuples of ints in 0..=255")
+            })?;
+            Ok(LightPixel { r, g, b })
+        })
+        .collect()
+}
 
 #[pyclass(module = "booster_sdk_bindings", name = "RobotMode", eq)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1479,24 +1579,277 @@ impl From<Odometer> for PyOdometer {
 
 #[pyclass(module = "booster_sdk_bindings", name = "BoosterClient", unsendable)]
 pub struct PyBoosterClient {
-    client: Arc<BoosterClient>,
+    pub(crate) client: Arc<BoosterClient>,
 }
 
 #[pymethods]
 impl PyBoosterClient {
     #[new]
-    #[pyo3(signature = (startup_wait_sec=None))]
-    fn new(startup_wait_sec: Option<f64>) -> PyResult<Self> {
-        let startup_wait = startup_wait_from_seconds(startup_wait_sec)?;
-        let client = match startup_wait {
-            Some(wait) => BoosterClient::with_startup_wait(wait),
-            None => BoosterClient::new(),
-        }
-        .map_err(to_py_err)?;
-
+    #[pyo3(signature = (startup_wait_sec=None, *, robot_name=None, network=None, domain_id=None))]
+    fn new(
+        startup_wait_sec: Option<f64>,
+        robot_name: Option<String>,
+        network: Option<&Bound<'_, PyAny>>,
+        domain_id: Option<u16>,
+    ) -> PyResult<Self> {
+        let options = rpc_options(startup_wait_sec, robot_name, network, domain_id)?;
+        let client = BoosterClient::with_options(options).map_err(to_py_err)?;
         Ok(Self {
             client: Arc::new(client),
         })
+    }
+
+    /// Send a fire-and-forget velocity command (C++ `MoveCommand`).
+    fn move_command(&self, py: Python<'_>, vx: f32, vy: f32, vyaw: f32) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.move_command(vx, vy, vyaw).await })
+            .map_err(to_py_err)
+    }
+
+    /// Wait until the locomotion service is discovered (C++ `WaitForService`).
+    #[pyo3(signature = (timeout_sec, require_response_path=false))]
+    fn wait_for_service(
+        &self,
+        py: Python<'_>,
+        timeout_sec: f64,
+        require_response_path: bool,
+    ) -> PyResult<bool> {
+        let timeout = duration_from_secs("timeout_sec", timeout_sec)?;
+        let client = Arc::clone(&self.client);
+        Ok(wait_for_future(py, async move {
+            client
+                .wait_for_service(timeout, require_response_path)
+                .await
+        }))
+    }
+
+    /// Query trained-trajectory execution status.
+    fn get_trained_traj_status(&self, py: Python<'_>) -> PyResult<PyGetTrainedTrajStatusResponse> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.get_trained_traj_status().await })
+            .map(Into::into)
+            .map_err(to_py_err)
+    }
+
+    /// Raise (`up=True`) or lower the hand-on-chest greeting (T2 only).
+    fn hand_on_chest_greeting(&self, py: Python<'_>, up: bool) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.hand_on_chest_greeting(up).await })
+            .map_err(to_py_err)
+    }
+
+    /// Send a raw request (`api_id` is a `LocoApiId` or int) and return the
+    /// raw response body.
+    #[pyo3(signature = (api_id, param=String::new()))]
+    fn send_api_request(&self, py: Python<'_>, api_id: i32, param: String) -> PyResult<String> {
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move {
+            client.rpc().send_api_request(api_id, param).await
+        })
+        .map_err(to_py_err)
+    }
+
+    /// Start a locomotion request as an asynchronous operation.
+    ///
+    /// Returns once the service accepted it (waiting up to
+    /// `start_timeout_sec`); progress and the result arrive through the
+    /// returned `ApiOperation`.
+    #[pyo3(signature = (api_id, param=String::new(), start_timeout_sec=1.0))]
+    fn start_operation(
+        &self,
+        py: Python<'_>,
+        api_id: i32,
+        param: String,
+        start_timeout_sec: f64,
+    ) -> PyResult<PyApiOperation> {
+        let api_id = loco_api_id(api_id)?;
+        let start_timeout = duration_from_secs("start_timeout_sec", start_timeout_sec)?;
+        let client = Arc::clone(&self.client);
+        let operation = wait_for_future(py, async move {
+            client
+                .start_operation_with_timeout(api_id, param, start_timeout)
+                .await
+        })
+        .map_err(to_py_err)?;
+        Ok(PyApiOperation::new(Arc::clone(&self.client), operation))
+    }
+
+    /// Cancel an operation started with `start_operation` (same as
+    /// `operation.cancel()`).
+    fn cancel_operation(
+        &self,
+        py: Python<'_>,
+        operation: PyRef<'_, PyApiOperation>,
+    ) -> PyResult<()> {
+        let handle = operation.handle().clone();
+        drop(operation);
+        let client = Arc::clone(&self.client);
+        wait_for_future(py, async move { client.cancel_operation(&handle).await })
+            .map_err(to_py_err)
+    }
+
+    /// Publish an LED strip command: an iterable of `(r, g, b)` tuples.
+    fn publish_light_control(&self, pixels: &Bound<'_, PyAny>) -> PyResult<()> {
+        let pixels = light_pixels(pixels)?;
+        self.client
+            .publish_light_control(LightControlMsg { pixels })
+            .map_err(to_py_err)
+    }
+
+    /// Publish a safe-mode message with a raw payload.
+    #[pyo3(signature = (data=Vec::new()))]
+    fn enter_safe_mode(&self, data: Vec<u8>) -> PyResult<()> {
+        self.client
+            .enter_safe_mode(SafeMode { data })
+            .map_err(to_py_err)
+    }
+
+    /// Create a publisher for low-level joint commands (`rt/joint_ctrl`).
+    fn low_cmd_publisher(&self) -> PyResult<PyLowCmdPublisher> {
+        self.client
+            .low_cmd_publisher()
+            .map(PyLowCmdPublisher)
+            .map_err(to_py_err)
+    }
+
+    /// Create a publisher for kick reference commands (`rt/kick_ball`).
+    fn kick_publisher(&self) -> PyResult<PyKickPublisher> {
+        self.client
+            .kick_publisher()
+            .map(PyKickPublisher)
+            .map_err(to_py_err)
+    }
+
+    /// Subscribe to device health (`rt/device_gateway`).
+    fn subscribe_device_gateway(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_device_gateway().map_err(to_py_err)?;
+        Ok(PySubscription::of::<RobotStatusDdsMsg, PyRobotStatusDdsMsg>(sub))
+    }
+
+    /// Subscribe to motion state.
+    fn subscribe_motion_state(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_motion_state().map_err(to_py_err)?;
+        Ok(PySubscription::of::<MotionState, PyMotionState>(sub))
+    }
+
+    /// Subscribe to battery state.
+    fn subscribe_battery_state(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_battery_state().map_err(to_py_err)?;
+        Ok(PySubscription::of::<BatteryState, PyBatteryState>(sub))
+    }
+
+    /// Subscribe to physical button events.
+    fn subscribe_button_events(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_button_events().map_err(to_py_err)?;
+        Ok(PySubscription::of::<ButtonEventMsg, PyButtonEventMsg>(sub))
+    }
+
+    /// Subscribe to remote controller (gamepad) state.
+    fn subscribe_remote_controller(&self) -> PyResult<PySubscription> {
+        let sub = self
+            .client
+            .subscribe_remote_controller()
+            .map_err(to_py_err)?;
+        Ok(PySubscription::of::<
+            RemoteControllerState,
+            PyRemoteControllerState,
+        >(sub))
+    }
+
+    /// Subscribe to robot process states.
+    fn subscribe_process_state(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_process_state().map_err(to_py_err)?;
+        Ok(PySubscription::of::<
+            RobotProcessStateMsg,
+            PyRobotProcessStateMsg,
+        >(sub))
+    }
+
+    /// Subscribe to video stream payloads.
+    fn subscribe_video_stream(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_video_stream().map_err(to_py_err)?;
+        Ok(PySubscription::of::<BinaryData, PyBinaryData>(sub))
+    }
+
+    /// Subscribe to low-level motor and IMU state (`rt/low_state`).
+    fn subscribe_low_state(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_low_state().map_err(to_py_err)?;
+        Ok(PySubscription::of::<LowState, PyLowState>(sub))
+    }
+
+    /// Subscribe to fall and recovery state (`rt/fall_down`).
+    fn subscribe_fall_down(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_fall_down().map_err(to_py_err)?;
+        Ok(PySubscription::of::<FallDownState, PyFallDownState>(sub))
+    }
+
+    /// Subscribe to mode / body-control / action state (`rt/robot_states`).
+    fn subscribe_robot_states(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_robot_states().map_err(to_py_err)?;
+        Ok(PySubscription::of::<RobotStatesMsg, PyRobotStatesMsg>(sub))
+    }
+
+    /// Subscribe to prone-body and visual-kick status.
+    fn subscribe_prone_body_control_status(&self) -> PyResult<PySubscription> {
+        let sub = self
+            .client
+            .subscribe_prone_body_control_status()
+            .map_err(to_py_err)?;
+        Ok(PySubscription::of::<
+            ProneBodyControlStatus,
+            PyProneBodyControlStatus,
+        >(sub))
+    }
+
+    /// Subscribe to the id of the recorded trajectory being replayed.
+    fn subscribe_robot_replay_traj_id(&self) -> PyResult<PySubscription> {
+        let sub = self
+            .client
+            .subscribe_robot_replay_traj_id()
+            .map_err(to_py_err)?;
+        Ok(PySubscription::of::<RobotReplayTrajID, PyRobotReplayTrajID>(sub))
+    }
+
+    /// Subscribe to trained-trajectory execution status.
+    fn subscribe_trained_traj_status(&self) -> PyResult<PySubscription> {
+        let sub = self
+            .client
+            .subscribe_trained_traj_status()
+            .map_err(to_py_err)?;
+        Ok(PySubscription::of::<
+            TrainedTrajStatus,
+            PyTrainedTrajStatusMsg,
+        >(sub))
+    }
+
+    /// Subscribe to soccer behavior state (K1 / T1).
+    fn subscribe_robocup_behavior_status(&self) -> PyResult<PySubscription> {
+        let sub = self
+            .client
+            .subscribe_robocup_behavior_status()
+            .map_err(to_py_err)?;
+        Ok(PySubscription::of::<
+            RobocupBehaviorStatus,
+            PyRobocupBehaviorStatusMsg,
+        >(sub))
+    }
+
+    /// Subscribe to dexterous-hand actuator data.
+    fn subscribe_hand_data(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_hand_data().map_err(to_py_err)?;
+        Ok(PySubscription::of::<HandReplyData, PyHandReplyData>(sub))
+    }
+
+    /// Subscribe to hand touch-sensor data.
+    fn subscribe_hand_touch_data(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_hand_touch_data().map_err(to_py_err)?;
+        Ok(PySubscription::of::<HandTouchData, PyHandTouchData>(sub))
+    }
+
+    /// Subscribe to the robot transform tree (`rt/tf`).
+    fn subscribe_tf(&self) -> PyResult<PySubscription> {
+        let sub = self.client.subscribe_tf().map_err(to_py_err)?;
+        Ok(PySubscription::of::<TFMessage, PyTFMessage>(sub))
     }
 
     /// Subscribe to planar odometry (`rt/odometer_state`).
@@ -2005,6 +2358,7 @@ impl PyBoosterClient {
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<PyLocoApiId>()?;
     m.add_class::<PyRobotMode>()?;
     m.add_class::<PyOdometer>()?;
     m.add_class::<PyHand>()?;

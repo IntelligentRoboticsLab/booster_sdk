@@ -45,7 +45,17 @@ device/Bluetooth management.
 SDK 1.8 additions include:
 
 - asynchronous RPC operations with progress/result events and cancellation
-  (`BoosterClient::start_operation` / `cancel_operation`, Rust only);
+  (`start_operation` / `cancel_operation`);
+- low-level topics: joint commands (`rt/joint_ctrl`), motor/IMU state
+  (`rt/low_state`), kick commands, fall-down, robot-state, trajectory, soccer,
+  hand and transform-tree (`rt/tf`) topics, with joint layouts for T1, K1 and
+  T1 with 7-DoF arms;
+- `MoveController` (odometry point-to-point walking) and `ArmController`
+  (interpolated arm-joint control), plus fire-and-forget `move_command`;
+- DDS network/domain selection per client (`network=` / `domain_id=` in
+  Python, `BOOSTER_DDS_NETWORK` / `BOOSTER_DOMAIN_ID`) and robot-name topics;
+- Python topic subscriptions (`client.subscribe_*()` returns an iterable
+  `Subscription`);
 - resetting odometry to a target pose (`reset_odometry_to`);
 - per-client LUI ASR/TTS sessions, speech synthesis to audio, and one-shot or
   session-based audio recognition;

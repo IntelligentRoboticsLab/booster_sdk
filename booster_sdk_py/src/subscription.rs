@@ -5,17 +5,12 @@
 //! [`PySubscription::new`], passing a function that converts each Rust sample
 //! into its Python class.
 
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use booster_sdk::dds::DdsSubscription;
 use pyo3::{exceptions::PyValueError, prelude::*};
 
-use crate::runtime::get_tokio_runtime;
-
-/// How long a blocking `recv` waits between checks for Python signals
-/// (so Ctrl-C works while waiting).
-const SIGNAL_CHECK_INTERVAL: Duration = Duration::from_millis(100);
+use crate::runtime::{DetachedMutex, SIGNAL_CHECK_INTERVAL, get_tokio_runtime};
 
 type Converter<T> = Box<dyn Fn(Python<'_>, T) -> PyResult<Py<PyAny>> + Send>;
 
@@ -84,7 +79,7 @@ impl<T: Send + 'static> ErasedSubscription for Typed<T> {
 /// Each returns `None` once the subscription is closed (or on timeout).
 #[pyclass(module = "booster_sdk_bindings", name = "Subscription")]
 pub struct PySubscription {
-    inner: Mutex<Option<Box<dyn ErasedSubscription>>>,
+    inner: DetachedMutex<Option<Box<dyn ErasedSubscription>>>,
 }
 
 impl PySubscription {
@@ -95,7 +90,7 @@ impl PySubscription {
         F: Fn(Python<'_>, T) -> PyResult<Py<PyAny>> + Send + 'static,
     {
         Self {
-            inner: Mutex::new(Some(Box::new(Typed {
+            inner: DetachedMutex::new(Some(Box::new(Typed {
                 subscription,
                 convert: Box::new(convert),
             }))),
@@ -115,12 +110,10 @@ impl PySubscription {
 
     fn with_inner<R>(
         &self,
+        py: Python<'_>,
         f: impl FnOnce(&mut Box<dyn ErasedSubscription>) -> PyResult<Option<R>>,
     ) -> PyResult<Option<R>> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| PyValueError::new_err("subscription lock poisoned"))?;
+        let mut guard = self.inner.lock(py)?;
         match guard.as_mut() {
             Some(inner) => f(inner),
             None => Ok(None),
@@ -148,7 +141,7 @@ impl PySubscription {
                     .saturating_duration_since(Instant::now())
                     .min(SIGNAL_CHECK_INTERVAL)
             });
-            match self.with_inner(|inner| inner.recv_slice(py, slice).map(Some))? {
+            match self.with_inner(py, |inner| inner.recv_slice(py, slice).map(Some))? {
                 Some(Slice::Sample(sample)) => return Ok(Some(sample)),
                 Some(Slice::Pending) => {}
                 // Closed, or `close()` was called.
@@ -158,32 +151,30 @@ impl PySubscription {
                 return Ok(None);
             }
             py.check_signals()?;
+            self.inner.yield_to_waiters(py);
         }
     }
 
     /// Return the next queued sample, or `None` if none is pending.
     fn try_recv(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        self.with_inner(|inner| inner.try_recv(py))
+        self.with_inner(py, |inner| inner.try_recv(py))
     }
 
     /// Drain the queue and return only the newest sample, or `None`.
     fn latest(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        self.with_inner(|inner| inner.latest(py))
+        self.with_inner(py, |inner| inner.latest(py))
     }
 
     /// Number of remote publishers currently matched with this subscription.
-    fn matched_publications(&self) -> PyResult<usize> {
+    fn matched_publications(&self, py: Python<'_>) -> PyResult<usize> {
         Ok(self
-            .with_inner(|inner| Ok(Some(inner.matched_publications())))?
+            .with_inner(py, |inner| Ok(Some(inner.matched_publications())))?
             .unwrap_or(0))
     }
 
     /// Stop receiving and release the DDS reader.
-    fn close(&self) -> PyResult<()> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| PyValueError::new_err("subscription lock poisoned"))?;
+    fn close(&self, py: Python<'_>) -> PyResult<()> {
+        let mut guard = self.inner.lock(py)?;
         if let Some(mut inner) = guard.take() {
             inner.close();
         }
@@ -191,12 +182,8 @@ impl PySubscription {
     }
 
     /// Whether `close()` has been called.
-    fn is_closed(&self) -> PyResult<bool> {
-        Ok(self
-            .inner
-            .lock()
-            .map_err(|_| PyValueError::new_err("subscription lock poisoned"))?
-            .is_none())
+    fn is_closed(&self, py: Python<'_>) -> PyResult<bool> {
+        Ok(self.inner.lock(py)?.is_none())
     }
 
     fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
@@ -213,8 +200,8 @@ impl PySubscription {
     }
 
     #[pyo3(signature = (*_args))]
-    fn __exit__(&self, _args: &Bound<'_, pyo3::types::PyTuple>) -> PyResult<()> {
-        self.close()
+    fn __exit__(&self, py: Python<'_>, _args: &Bound<'_, pyo3::types::PyTuple>) -> PyResult<()> {
+        self.close(py)
     }
 }
 
