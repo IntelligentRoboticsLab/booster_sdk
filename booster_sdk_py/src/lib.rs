@@ -1,5 +1,6 @@
 mod client;
 mod runtime;
+mod subscription;
 
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -80,6 +81,7 @@ fn booster_sdk_bindings(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()>
     m.add("BOOSTER_ROBOT_USER_ID", BOOSTER_ROBOT_USER_ID)?;
 
     client::register_classes(m)?;
+    subscription::register(m)?;
 
     Ok(())
 }
