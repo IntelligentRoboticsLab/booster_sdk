@@ -51,6 +51,8 @@ crate::api_id_enum! {
         GetSensors = 2044,
         GetHands = 2045,
         GetRobotModel = 2046,
+        GetTrainedTrajStatus = 2047,
+        HandOnChestGreeting = 2050,
     }
 }
 
@@ -186,6 +188,10 @@ crate::api_id_enum! {
         ShanHeGuRenDance = 7,
         GaiGeChunFengDance = 8,
         MichaelDance1And2 = 9,
+        /// Bow-and-arrow trajectory (T2).
+        BowAndArrow = 10,
+        /// Charleston dance trajectory (T2).
+        CharlestonDance = 11,
     }
 }
 
@@ -214,7 +220,7 @@ crate::api_id_enum! {
 }
 
 /// Cartesian position.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
@@ -222,7 +228,7 @@ pub struct Position {
 }
 
 /// Euler orientation in radians.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Orientation {
     pub roll: f32,
     pub pitch: f32,
@@ -230,14 +236,14 @@ pub struct Orientation {
 }
 
 /// Position and orientation pair.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Posture {
     pub position: Position,
     pub orientation: Orientation,
 }
 
 /// Quaternion orientation.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Quaternion {
     pub x: f32,
     pub y: f32,
@@ -246,7 +252,7 @@ pub struct Quaternion {
 }
 
 /// Transform with position and quaternion orientation.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Transform {
     pub position: Position,
     pub orientation: Quaternion,
@@ -376,6 +382,24 @@ pub struct LoadCustomTrainedTrajResponse {
     pub tid: String,
 }
 
+/// Response payload for `GetTrainedTrajStatus`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GetTrainedTrajStatusResponse {
+    /// Raw trained-trajectory status (`0` = idle, `1` = running).
+    pub status: i32,
+    /// Active trajectory id, or empty when no trajectory is identified.
+    #[serde(default)]
+    pub traj_id: String,
+}
+
+impl GetTrainedTrajStatusResponse {
+    /// Whether a trained trajectory is currently running.
+    #[must_use]
+    pub fn is_running(&self) -> bool {
+        self.status == 1
+    }
+}
+
 /// Convenience alias matching the C++ naming.
 pub type HandIndex = Hand;
 
@@ -392,6 +416,22 @@ mod tests {
         assert_eq!(i32::from(LocoApiId::GetRobotModel), 2046);
         assert_eq!(i32::from(GaitType::WholeBodyHumanlikeGaitV2), 3);
         assert_eq!(i32::from(BodyControl::VisualKickV1), 14);
+    }
+
+    #[test]
+    fn sdk_1_8_ids_match_cpp_sdk() {
+        assert_eq!(i32::from(LocoApiId::GetTrainedTrajStatus), 2047);
+        assert_eq!(i32::from(LocoApiId::HandOnChestGreeting), 2050);
+        assert_eq!(i32::from(WholeBodyDanceId::BowAndArrow), 10);
+        assert_eq!(i32::from(WholeBodyDanceId::CharlestonDance), 11);
+    }
+
+    #[test]
+    fn trained_traj_status_tolerates_missing_traj_id() {
+        let resp: GetTrainedTrajStatusResponse =
+            serde_json::from_value(json!({"status": 1})).unwrap();
+        assert!(resp.is_running());
+        assert!(resp.traj_id.is_empty());
     }
 
     #[test]

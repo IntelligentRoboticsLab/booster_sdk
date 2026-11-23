@@ -15,7 +15,7 @@ use crate::dds::{
 use crate::types::{
     BoosterHandType, CustomTrainedTraj, DanceId, DeviceInfo, DeviceInfoKind,
     DexterousFingerParameter, Frame, GaitType, GetModeResponse, GetRobotInfoResponse,
-    GetStatusResponse, GetUpVersion, GripperControlMode, GripperMode, GripperMotionParameter, Hand,
+    GetStatusResponse, GetTrainedTrajStatusResponse, GetUpVersion, GripperControlMode, GripperMode, GripperMotionParameter, Hand,
     HandAction, HandIndex, LoadCustomTrainedTrajResponse, LocoApiId, Result, RobotMode, Transform,
     VisualKickVersion, WholeBodyDanceId,
 };
@@ -44,6 +44,15 @@ impl BoosterClient {
     }
 
     /// Create a locomotion client with custom RPC options.
+    /// Create a client for a named robot (`rt/LocoApiTopic/<robot_name>`).
+    ///
+    /// Equivalent to the C++ `B1LocoClient::Init(robot_name)`. An empty name
+    /// selects the default robot.
+    pub fn with_robot_name(robot_name: impl Into<String>) -> Result<Self> {
+        Self::with_options(RpcClientOptions::default().with_robot_name(robot_name))
+    }
+
+    /// Create a client with explicit RPC options.
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
         let rpc = RpcClient::new(options)?;
         let node = rpc.node().clone();
@@ -466,6 +475,32 @@ impl BoosterClient {
         self.rpc
             .call_void(LocoApiId::UnloadCustomTrainedTraj, param)
             .await
+    }
+
+    /// Query trained-trajectory execution status.
+    pub async fn get_trained_traj_status(&self) -> Result<GetTrainedTrajStatusResponse> {
+        self.rpc
+            .call_response(LocoApiId::GetTrainedTrajStatus, "")
+            .await
+    }
+
+    /// Raise (`up = true`) or lower the hand-on-chest greeting (T2 only).
+    pub async fn hand_on_chest_greeting(&self, up: bool) -> Result<()> {
+        let param = json!({ "up": up }).to_string();
+        self.rpc
+            .call_void(LocoApiId::HandOnChestGreeting, param)
+            .await
+    }
+
+    /// Send a raw request and return the raw response body.
+    ///
+    /// Equivalent to the C++ `SendApiRequestWithResponse`.
+    pub async fn send_api_request(
+        &self,
+        api_id: LocoApiId,
+        param: impl Into<String>,
+    ) -> Result<String> {
+        self.rpc.send_api_request(api_id.into(), param).await
     }
 
     /// Enter WBC gait mode.
