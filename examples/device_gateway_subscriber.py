@@ -18,7 +18,7 @@ class RobotDdsJointStatus:
     index: int
     is_connected: bool
     temperature: int
-    is_limited: bool
+    is_limited: int
     status_code: int
     temperature_level: int
 
@@ -34,10 +34,11 @@ class RobotDdsImuStatus:
 @dataclass
 class RobotDdsBatteryStatus:
     name: str
-    index: int
+    temperature: float
     soc: float
+    voltage: float
     status_code: int
-    soc_level: int
+    status_level: int
 
 
 @dataclass

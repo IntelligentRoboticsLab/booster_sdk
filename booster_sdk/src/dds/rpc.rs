@@ -172,6 +172,7 @@ impl RpcClient {
     pub fn new(options: RpcClientOptions) -> Result<Self> {
         let node = DdsNode::new(super::DdsConfig {
             domain_id: options.domain_id,
+            ..Default::default()
         })?;
 
         let service_topic = options.resolved_service_topic();

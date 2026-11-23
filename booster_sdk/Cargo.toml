@@ -18,6 +18,8 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 typed-builder = { workspace = true }
 rustdds = { workspace = true }
+if-addrs = "0.14"
 
 [dev-dependencies]
+byteorder = "1.5"
 tracing-subscriber = { workspace = true }
