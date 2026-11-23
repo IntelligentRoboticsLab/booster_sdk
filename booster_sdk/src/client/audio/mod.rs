@@ -1,4 +1,31 @@
-//! Audio service RPC client for Booster SDK v1.7.
+//! Audio service client for Booster SDK v1.8.
+//!
+//! Mirrors the C++ `booster::robot::audio` API:
+//!
+//! - [`AudioClient`] corresponds to `AudioManager`: registration, the flat
+//!   per-method RPCs, system volume/mute, devices, Bluetooth and the
+//!   progress/event/error/Bluetooth topics.
+//! - [`AudioPlayer`], [`AudioRecorder`], [`AudioLocalizer`] and
+//!   [`AudioCaptureStream`] are per-session handles created from an
+//!   `Arc<AudioClient>` (`AudioManager::Create*`).
+//!
+//! Each audio RPC uses its own `rt/booster/audio/<method>` channel. Unlike other
+//! services, the C++ audio API has no robot-name variant, so
+//! [`RpcClientOptions::robot_name`] is ignored here.
+//!
+//! The C++ `CallService` uses a 1000 ms default timeout; this client keeps
+//! [`RpcClientOptions::default_timeout`] (5 s by default) so slow calls such
+//! as player initialization on a busy robot do not spuriously time out. Use
+//! [`AudioClient::with_options`] with
+//! [`RpcClientOptions::with_default_timeout`] to match the C++ value.
+
+mod messages;
+mod session;
+mod types;
+
+pub use messages::*;
+pub use session::*;
+pub use types::*;
 
 use std::{
     collections::HashMap,
@@ -6,7 +33,7 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -14,9 +41,10 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     dds::{
-        BluetoothEvent, DdsSubscription, RpcClient, RpcClientOptions, audio_bluetooth_event_topic,
+        BluetoothEvent, DdsSubscription, RpcClient, RpcClientOptions, TopicSpec,
+        audio_bluetooth_event_topic,
     },
-    types::{Result, RpcError},
+    types::{BoosterError, Result, RpcError},
 };
 
 const AUDIO_RPC_API_ID: i32 = 0;
@@ -51,6 +79,7 @@ enum AudioServiceMethod {
     DestroyCaptureStream,
     GetCaptureStreamInfo,
     GetDevices,
+    SetPreferredDevice,
     StartBluetoothScan,
     StopBluetoothScan,
     GetBluetoothDevices,
@@ -90,6 +119,7 @@ impl AudioServiceMethod {
             Self::DestroyCaptureStream => "rt/booster/audio/destroy_capture_stream",
             Self::GetCaptureStreamInfo => "rt/booster/audio/get_capture_stream_info",
             Self::GetDevices => "rt/booster/audio/get_devices",
+            Self::SetPreferredDevice => "rt/booster/audio/set_preferred_device",
             Self::StartBluetoothScan => "rt/booster/audio/start_bluetooth_scan",
             Self::StopBluetoothScan => "rt/booster/audio/stop_bluetooth_scan",
             Self::GetBluetoothDevices => "rt/booster/audio/get_bluetooth_devices",
@@ -97,418 +127,6 @@ impl AudioServiceMethod {
             Self::DisconnectBluetoothDevice => "rt/booster/audio/disconnect_bluetooth_device",
             Self::ForgetBluetoothDevice => "rt/booster/audio/forget_bluetooth_device",
         }
-    }
-}
-
-crate::api_id_enum! {
-    /// Audio source type.
-    AudioSourceType {
-        PcmFile = 0,
-        WavFile = 1,
-        PcmStream = 2,
-        Mp3File = 3,
-    }
-}
-
-crate::api_id_enum! {
-    /// Direction used when querying audio devices.
-    AudioDeviceQueryType {
-        Inputs = 0,
-        Outputs = 1,
-    }
-}
-
-crate::api_id_enum! {
-    /// Audio device direction.
-    AudioDeviceDirection {
-        Input = 0,
-        Output = 1,
-    }
-}
-
-crate::api_id_enum! {
-    /// Audio device transport.
-    AudioDeviceTransport {
-        Builtin = 0,
-        Usb = 1,
-        Bluetooth = 2,
-        Virtual = 3,
-        Unknown = 4,
-    }
-}
-
-crate::api_id_enum! {
-    /// Backend responsible for an audio device.
-    AudioDeviceBackendAffinity {
-        Pulse = 0,
-        BoosterAecArray = 1,
-        AlsaDiagnostic = 2,
-    }
-}
-
-crate::api_id_enum! {
-    /// Bluetooth scanning state.
-    BluetoothScanState {
-        Idle = 0,
-        Scanning = 1,
-    }
-}
-
-crate::api_id_enum! {
-    /// Bluetooth device connection state.
-    BluetoothDeviceState {
-        Unknown = 0,
-        Paired = 1,
-        Connecting = 2,
-        Connected = 3,
-        Disconnecting = 4,
-        Failed = 5,
-    }
-}
-
-crate::api_id_enum! {
-    /// Bluetooth major device class.
-    BluetoothMajorClass {
-        Audio = 0,
-        Peripheral = 1,
-        Phone = 2,
-        Computer = 3,
-        Other = 4,
-    }
-}
-
-crate::api_id_enum! {
-    /// Bluetooth audio profile.
-    BluetoothAudioProfile {
-        None = 0,
-        A2dpSink = 1,
-        A2dpSource = 2,
-        HfpHeadset = 3,
-        HfpAg = 4,
-    }
-}
-
-crate::api_id_enum! {
-    /// Player state.
-    PlayerState {
-        Idle = 0,
-        Ready = 1,
-        Playing = 2,
-        Paused = 3,
-        Stopped = 4,
-        Completed = 5,
-        Error = 6,
-    }
-}
-
-crate::api_id_enum! {
-    /// Player priority.
-    PlayerPriority {
-        Low = 0,
-        Medium = 1,
-        High = 2,
-    }
-}
-
-crate::api_id_enum! {
-    /// Recorder state.
-    RecorderState {
-        Idle = 0,
-        Ready = 1,
-        Recording = 2,
-        Paused = 3,
-        Stopped = 4,
-        Error = 5,
-    }
-}
-
-crate::api_id_enum! {
-    /// Audio capture stream state.
-    AudioCaptureStreamState {
-        Idle = 0,
-        Ready = 1,
-        Streaming = 2,
-        Paused = 3,
-        Stopped = 4,
-        Error = 5,
-    }
-}
-
-/// PCM format descriptor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PcmFormat {
-    pub sample_rate_hz: i32,
-    pub channels: i32,
-    pub bits_per_sample: i32,
-}
-
-impl Default for PcmFormat {
-    fn default() -> Self {
-        Self {
-            sample_rate_hz: 16_000,
-            channels: 1,
-            bits_per_sample: 16,
-        }
-    }
-}
-
-/// Player initialization options.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlayerInitOptions {
-    pub source_type: AudioSourceType,
-    pub source_uri: String,
-    pub sample_rate_hz: i32,
-    pub channels: i32,
-    pub bits_per_sample: i32,
-    pub priority: PlayerPriority,
-}
-
-impl PlayerInitOptions {
-    #[must_use]
-    pub fn pcm_stream() -> Self {
-        Self {
-            source_type: AudioSourceType::PcmStream,
-            source_uri: "pcm_stream".to_owned(),
-            sample_rate_hz: 16_000,
-            channels: 1,
-            bits_per_sample: 16,
-            priority: PlayerPriority::Medium,
-        }
-    }
-}
-
-/// Recorder initialization options.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RecorderInitOptions {
-    pub output_path: String,
-    pub sample_rate_hz: i32,
-    pub channels: i32,
-    pub bits_per_sample: i32,
-}
-
-/// Audio capture stream initialization options.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AudioCaptureStreamOptions {
-    pub enable_raw_pcm: bool,
-    pub enable_naec_pcm: bool,
-    pub requested_raw_format: PcmFormat,
-}
-
-impl Default for AudioCaptureStreamOptions {
-    fn default() -> Self {
-        Self {
-            enable_raw_pcm: true,
-            enable_naec_pcm: false,
-            // BoosterAEC raw PCM default: 16 kHz, 3 channels, 16-bit.
-            requested_raw_format: PcmFormat {
-                channels: 3,
-                ..PcmFormat::default()
-            },
-        }
-    }
-}
-
-/// Generic audio service result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ServiceResult {
-    pub ret_code: i32,
-    #[serde(default)]
-    pub ret_msg: String,
-}
-
-/// Response returned by player initialization.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InitPlayerResponse {
-    pub ret_code: i32,
-    #[serde(default)]
-    pub ret_msg: String,
-    pub session_id: i64,
-}
-
-/// Response returned by recorder initialization.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InitRecorderResponse {
-    pub ret_code: i32,
-    #[serde(default)]
-    pub ret_msg: String,
-    pub session_id: i64,
-}
-
-/// Response returned by audio capture stream initialization.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InitCaptureStreamResponse {
-    pub ret_code: i32,
-    #[serde(default)]
-    pub ret_msg: String,
-    pub session_id: i64,
-    #[serde(default)]
-    pub data_topic_name: String,
-}
-
-/// Player status.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PlayerInfo {
-    pub state: i32,
-    pub played_bytes: i64,
-    pub total_bytes: i64,
-    pub volume: f32,
-}
-
-impl PlayerInfo {
-    #[must_use]
-    pub fn state_enum(&self) -> Option<PlayerState> {
-        PlayerState::try_from(self.state).ok()
-    }
-}
-
-/// Recorder status.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RecorderInfo {
-    pub state: i32,
-    pub captured_bytes: i64,
-}
-
-impl RecorderInfo {
-    #[must_use]
-    pub fn state_enum(&self) -> Option<RecorderState> {
-        RecorderState::try_from(self.state).ok()
-    }
-}
-
-/// Audio capture stream status.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AudioCaptureStreamInfo {
-    pub state: i32,
-    #[serde(default)]
-    pub raw_enabled: bool,
-    #[serde(default)]
-    pub naec_enabled: bool,
-    #[serde(default)]
-    pub actual_raw_format: PcmFormat,
-    #[serde(default)]
-    pub actual_naec_format: PcmFormat,
-    #[serde(default)]
-    pub published_frames: i64,
-    #[serde(default)]
-    pub dropped_frames: i64,
-}
-
-/// Audio input or output device descriptor.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AudioDeviceInfo {
-    pub device_id: String,
-    pub display_name: String,
-    pub direction: AudioDeviceDirection,
-    pub transport: AudioDeviceTransport,
-    pub backend_affinity: AudioDeviceBackendAffinity,
-    pub is_available: bool,
-    pub is_system_default: bool,
-    pub supports_input: bool,
-    pub supports_output: bool,
-    #[serde(default)]
-    pub provider_name: String,
-    #[serde(default)]
-    pub native_id: String,
-    #[serde(default)]
-    pub metadata_json: String,
-}
-
-/// Bluetooth device descriptor.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BluetoothDeviceInfo {
-    pub address: String,
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
-    pub rssi: i16,
-    pub state: BluetoothDeviceState,
-    pub major_class: BluetoothMajorClass,
-    #[serde(default)]
-    pub paired: bool,
-    #[serde(default)]
-    pub trusted: bool,
-    #[serde(default)]
-    pub connected: bool,
-    #[serde(default)]
-    pub is_audio_sink: bool,
-    #[serde(default)]
-    pub is_audio_source: bool,
-    #[serde(default)]
-    pub is_hfp_capable: bool,
-    #[serde(default)]
-    pub connected_profiles: Vec<BluetoothAudioProfile>,
-    #[serde(default)]
-    pub linked_pulse_sink_id: String,
-    #[serde(default)]
-    pub linked_pulse_source_id: String,
-    #[serde(default)]
-    pub last_seen_ms: i64,
-}
-
-/// Options for Bluetooth discovery.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BluetoothScanOptions {
-    pub timeout_ms: i32,
-    pub audio_only: bool,
-}
-
-impl Default for BluetoothScanOptions {
-    fn default() -> Self {
-        Self {
-            timeout_ms: 30_000,
-            audio_only: true,
-        }
-    }
-}
-
-/// Options for connecting a Bluetooth audio device.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BluetoothConnectOptions {
-    pub address: String,
-    pub auto_pair: bool,
-    pub make_default: bool,
-    pub preferred_profile: BluetoothAudioProfile,
-    pub timeout_ms: i32,
-}
-
-impl BluetoothConnectOptions {
-    #[must_use]
-    pub fn new(address: impl Into<String>) -> Self {
-        Self {
-            address: address.into(),
-            auto_pair: true,
-            make_default: true,
-            preferred_profile: BluetoothAudioProfile::None,
-            timeout_ms: 15_000,
-        }
-    }
-}
-
-/// Result returned after connecting a Bluetooth audio device.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BluetoothConnectResult {
-    pub device: BluetoothDeviceInfo,
-    #[serde(default)]
-    pub pulse_sink_id: String,
-    #[serde(default)]
-    pub pulse_source_id: String,
-    pub active_profile: BluetoothAudioProfile,
-    #[serde(default)]
-    pub pulse_endpoint_ready: bool,
-    #[serde(default)]
-    pub default_sink_applied: bool,
-    #[serde(default)]
-    pub default_source_applied: bool,
-    #[serde(default)]
-    pub default_route_error_code: i32,
-    #[serde(default)]
-    pub default_route_error_msg: String,
-}
-
-impl AudioCaptureStreamInfo {
-    #[must_use]
-    pub fn state_enum(&self) -> Option<AudioCaptureStreamState> {
-        AudioCaptureStreamState::try_from(self.state).ok()
     }
 }
 
@@ -564,12 +182,43 @@ fn serialize_request<T: Serialize>(request: &T) -> Result<Value> {
     Ok(serde_json::to_value(request)?)
 }
 
-/// High-level client for the v1.6 audio service.
+/// Inject the `client_id`/`request_id` metadata every audio RPC carries.
+fn with_client_meta(request: Value, client_id: String, request_id: String) -> Value {
+    let mut object = match request {
+        Value::Object(object) => object,
+        Value::Null => Map::new(),
+        other => {
+            let mut object = Map::new();
+            object.insert("value".to_owned(), other);
+            object
+        }
+    };
+    object.insert("client_id".to_owned(), Value::String(client_id));
+    object.insert("request_id".to_owned(), Value::String(request_id));
+    Value::Object(object)
+}
+
+fn set_preferred_device_body(session_id: i64, device_id: &str) -> Value {
+    json!({ "session_id": session_id, "device_id": device_id })
+}
+
+/// High-level client for the audio service (C++ `AudioManager`).
+///
+/// Share it as `Arc<AudioClient>` to create per-session handles with
+/// [`AudioClient::create_player`] and friends.
 pub struct AudioClient {
     options: RpcClientOptions,
     clients: Mutex<HashMap<AudioServiceMethod, Arc<RpcClient>>>,
     client_id: Mutex<Option<String>>,
     request_sequence: AtomicU64,
+}
+
+impl std::fmt::Debug for AudioClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AudioClient")
+            .field("client_id", &self.client_id())
+            .finish_non_exhaustive()
+    }
 }
 
 impl AudioClient {
@@ -584,7 +233,13 @@ impl AudioClient {
     }
 
     /// Create an audio client with custom RPC options.
-    pub fn with_options(options: RpcClientOptions) -> Result<Self> {
+    ///
+    /// `options.robot_name` is ignored: the C++ audio service has no
+    /// robot-name channel suffix.
+    pub fn with_options(mut options: RpcClientOptions) -> Result<Self> {
+        if options.robot_name.take().is_some() {
+            tracing::debug!("audio client ignores robot_name; audio channels are not namespaced");
+        }
         Ok(Self {
             options,
             clients: Mutex::new(HashMap::new()),
@@ -606,9 +261,33 @@ impl AudioClient {
             .clone()
     }
 
-    fn next_request_id(&self) -> String {
+    /// Whether registration with the audio service has completed
+    /// (C++ `AudioManager::IsInitialized`).
+    pub fn is_initialized(&self) -> bool {
+        self.client_id().is_some()
+    }
+
+    /// Drop the cached client id and all per-method RPC channels
+    /// (C++ `AudioManager::Shutdown`). A later call re-registers lazily.
+    ///
+    /// Existing topic subscriptions keep running until they are dropped.
+    pub fn shutdown(&self) {
+        self.clients.lock().expect("audio clients mutex").clear();
+        *self.client_id.lock().expect("audio client_id mutex") = None;
+    }
+
+    /// Generate a request identifier (C++ `AudioManager::GenerateRequestId`):
+    /// `audio_req_<unix_ms>_<sequence>`.
+    pub fn generate_request_id(&self) -> String {
         let seq = self.request_sequence.fetch_add(1, Ordering::Relaxed);
-        format!("audio_req_{seq}")
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis());
+        format!("audio_req_{now_ms}_{seq}")
+    }
+
+    fn next_request_id(&self) -> String {
+        self.generate_request_id()
     }
 
     fn rpc_client(&self, method: AudioServiceMethod) -> Result<Arc<RpcClient>> {
@@ -665,19 +344,8 @@ impl AudioClient {
         R: DeserializeOwned + Send + 'static,
     {
         let client_id = self.ensure_registered().await?;
-        let request_id = self.next_request_id();
-        let mut object = match request {
-            Value::Object(object) => object,
-            Value::Null => Map::new(),
-            other => {
-                let mut object = Map::new();
-                object.insert("value".to_owned(), other);
-                object
-            }
-        };
-        object.insert("client_id".to_owned(), Value::String(client_id));
-        object.insert("request_id".to_owned(), Value::String(request_id));
-        self.call_raw(method, Value::Object(object)).await
+        let request = with_client_meta(request, client_id, self.next_request_id());
+        self.call_raw(method, request).await
     }
 
     async fn call_service_with_timeout<R>(
@@ -690,24 +358,9 @@ impl AudioClient {
         R: DeserializeOwned + Send + 'static,
     {
         let client_id = self.ensure_registered().await?;
-        let request_id = self.next_request_id();
-        let mut object = match request {
-            Value::Object(object) => object,
-            Value::Null => Map::new(),
-            other => {
-                let mut object = Map::new();
-                object.insert("value".to_owned(), other);
-                object
-            }
-        };
-        object.insert("client_id".to_owned(), Value::String(client_id));
-        object.insert("request_id".to_owned(), Value::String(request_id));
+        let request = with_client_meta(request, client_id, self.next_request_id());
         self.rpc_client(method)?
-            .call_with_body(
-                AUDIO_RPC_API_ID,
-                Value::Object(object).to_string(),
-                Some(timeout),
-            )
+            .call_with_body(AUDIO_RPC_API_ID, request.to_string(), Some(timeout))
             .await
     }
 
@@ -1087,11 +740,87 @@ impl AudioClient {
         .await
     }
 
-    /// Subscribe to Bluetooth lifecycle events.
-    pub fn subscribe_bluetooth_events(&self) -> Result<DdsSubscription<BluetoothEvent>> {
+    /// Select the input/output endpoint (an [`AudioDeviceInfo::device_id`])
+    /// used by a player, recorder or capture-stream session.
+    pub async fn set_preferred_device(
+        &self,
+        session_id: i64,
+        device_id: impl AsRef<str>,
+    ) -> Result<()> {
+        self.call_result(
+            AudioServiceMethod::SetPreferredDevice,
+            set_preferred_device_body(session_id, device_id.as_ref()),
+        )
+        .await
+    }
+
+    /// Create an uninitialized player handle (C++ `AudioManager::CreatePlayer`).
+    #[must_use]
+    pub fn create_player(self: &Arc<Self>) -> AudioPlayer {
+        AudioPlayer::new(Arc::clone(self))
+    }
+
+    /// Create an uninitialized recorder handle (C++ `AudioManager::CreateRecorder`).
+    #[must_use]
+    pub fn create_recorder(self: &Arc<Self>) -> AudioRecorder {
+        AudioRecorder::new(Arc::clone(self))
+    }
+
+    /// Create a direction-of-arrival localizer (C++ `AudioManager::CreateLocalizer`).
+    #[must_use]
+    pub fn create_localizer(self: &Arc<Self>) -> AudioLocalizer {
+        AudioLocalizer::new(Arc::clone(self))
+    }
+
+    /// Create an uninitialized capture stream handle
+    /// (C++ `AudioManager::CreateCaptureStream`).
+    #[must_use]
+    pub fn create_capture_stream(self: &Arc<Self>) -> AudioCaptureStream {
+        AudioCaptureStream::new(Arc::clone(self))
+    }
+
+    fn subscribe_topic<T>(&self, spec: &TopicSpec, buffer: usize) -> Result<DdsSubscription<T>>
+    where
+        T: DeserializeOwned + Send + 'static,
+    {
         self.rpc_client(AudioServiceMethod::RegisterClient)?
             .node()
-            .subscribe(&audio_bluetooth_event_topic(), 16)
+            .subscribe(spec, buffer)
+    }
+
+    /// Subscribe to Bluetooth lifecycle events.
+    pub fn subscribe_bluetooth_events(&self) -> Result<DdsSubscription<BluetoothEvent>> {
+        self.subscribe_topic(&audio_bluetooth_event_topic(), 16)
+    }
+
+    /// Subscribe to playback/recording progress (`rt/booster/audio/progress`).
+    pub fn subscribe_progress(&self) -> Result<DdsSubscription<AudioProgressTopic>> {
+        self.subscribe_topic(&audio_progress_topic(), 64)
+    }
+
+    /// Subscribe to session lifecycle events (`rt/booster/audio/events`).
+    pub fn subscribe_events(&self) -> Result<DdsSubscription<AudioEventTopic>> {
+        self.subscribe_topic(&audio_event_topic(), 64)
+    }
+
+    /// Subscribe to service errors (`rt/booster/audio/errors`).
+    pub fn subscribe_errors(&self) -> Result<DdsSubscription<AudioErrorTopic>> {
+        self.subscribe_topic(&audio_error_topic(), 64)
+    }
+
+    /// Subscribe to PCM frames of a capture stream, using the
+    /// `data_topic_name` returned by [`AudioClient::init_capture_stream`].
+    /// See [`capture_frame_topic_name`] for how the name is mapped.
+    pub fn subscribe_capture_frames(
+        &self,
+        data_topic_name: &str,
+    ) -> Result<DdsSubscription<AudioCaptureFrameTopic>> {
+        if data_topic_name.trim().is_empty() {
+            return Err(BoosterError::Validation(
+                "capture stream data_topic_name is empty".to_owned(),
+            ));
+        }
+        self.subscribe_topic(&audio_capture_frame_topic(data_topic_name), 256)
     }
 }
 
@@ -1129,5 +858,248 @@ mod tests {
             AudioServiceMethod::ForgetBluetoothDevice.topic(),
             "rt/booster/audio/forget_bluetooth_device"
         );
+        assert_eq!(
+            AudioServiceMethod::SetPreferredDevice.topic(),
+            "rt/booster/audio/set_preferred_device"
+        );
+    }
+
+    #[test]
+    fn set_preferred_device_request_body() {
+        let body = with_client_meta(
+            set_preferred_device_body(42, "alsa_output.usb"),
+            "client-1".to_owned(),
+            "audio_req_1".to_owned(),
+        );
+        assert_eq!(
+            body,
+            json!({
+                "session_id": 42,
+                "device_id": "alsa_output.usb",
+                "client_id": "client-1",
+                "request_id": "audio_req_1"
+            })
+        );
+    }
+
+    #[test]
+    fn client_meta_wraps_null_and_scalars() {
+        assert_eq!(
+            with_client_meta(Value::Null, "c".to_owned(), "r".to_owned()),
+            json!({ "client_id": "c", "request_id": "r" })
+        );
+        assert_eq!(
+            with_client_meta(json!(3), "c".to_owned(), "r".to_owned()),
+            json!({ "value": 3, "client_id": "c", "request_id": "r" })
+        );
+    }
+
+    #[test]
+    fn init_option_defaults_match_cpp() {
+        assert_eq!(
+            serde_json::to_value(PlayerInitOptions::default()).unwrap(),
+            json!({
+                "source_type": 0,
+                "source_uri": "",
+                "sample_rate_hz": 16000,
+                "channels": 1,
+                "bits_per_sample": 16,
+                "priority": 1
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(PlayerInitOptions::pcm_stream()).unwrap()["source_type"],
+            json!(2)
+        );
+        assert_eq!(
+            serde_json::to_value(RecorderInitOptions::default()).unwrap(),
+            json!({
+                "output_path": "",
+                "sample_rate_hz": 16000,
+                "channels": 1,
+                "bits_per_sample": 16
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(AudioCaptureStreamOptions::default()).unwrap(),
+            json!({
+                "enable_raw_pcm": true,
+                "enable_naec_pcm": false,
+                "requested_raw_format": {
+                    "sample_rate_hz": 16000,
+                    "channels": 3,
+                    "bits_per_sample": 16
+                }
+            })
+        );
+        let info = PlayerInfo::default();
+        assert_eq!(info.state_enum(), Some(PlayerState::Idle));
+        assert!((info.volume - 1.0).abs() < f32::EPSILON);
+        assert_eq!(
+            RecorderInfo::default().state_enum(),
+            Some(RecorderState::Idle)
+        );
+    }
+
+    #[test]
+    fn audio_common_enums_round_trip() {
+        for raw in 0..4 {
+            assert_eq!(i32::from(SessionType::try_from(raw).unwrap()), raw);
+        }
+        assert!(SessionType::try_from(4).is_err());
+        for raw in 0..13 {
+            assert_eq!(i32::from(AudioErrorCode::try_from(raw).unwrap()), raw);
+        }
+        assert!(AudioErrorCode::try_from(13).is_err());
+        for raw in 0..19 {
+            assert_eq!(i32::from(AudioEventCode::try_from(raw).unwrap()), raw);
+        }
+        assert!(AudioEventCode::try_from(19).is_err());
+        for raw in 0..8 {
+            assert_eq!(i32::from(AudioErrorCategory::try_from(raw).unwrap()), raw);
+        }
+        assert!(AudioErrorCategory::try_from(8).is_err());
+        for raw in 0..26 {
+            assert_eq!(i32::from(AudioErrorDetail::try_from(raw).unwrap()), raw);
+        }
+        assert!(AudioErrorDetail::try_from(26).is_err());
+
+        assert_eq!(
+            AudioEventCode::CaptureStreamDestroySucceeded,
+            AudioEventCode::try_from(18).unwrap()
+        );
+        assert_eq!(
+            AudioErrorDetail::GetCaptureStreamInfo,
+            AudioErrorDetail::try_from(25).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(AudioErrorCategory::InternalError).unwrap(),
+            json!(7)
+        );
+        assert_eq!(AUDIO_ERR_NOT_SUPPORTED, 7001);
+    }
+
+    #[test]
+    fn audio_topics_use_rt_prefix_and_dds_type_names() {
+        let progress = audio_progress_topic();
+        assert_eq!(progress.name, "rt/booster/audio/progress");
+        assert_eq!(
+            progress.type_name,
+            "booster_msgs::audio::dds_::AudioProgressTopic_"
+        );
+        assert_eq!(audio_event_topic().name, "rt/booster/audio/events");
+        assert_eq!(audio_error_topic().name, "rt/booster/audio/errors");
+        assert_eq!(
+            audio_capture_frame_topic("/booster/audio/capture/7").type_name,
+            "booster_msgs::audio::dds_::AudioCaptureFrameTopic_"
+        );
+    }
+
+    #[test]
+    fn capture_frame_topic_name_normalization() {
+        assert_eq!(
+            capture_frame_topic_name("/booster/audio/capture_stream/1"),
+            "rt/booster/audio/capture_stream/1"
+        );
+        assert_eq!(
+            capture_frame_topic_name("rt/booster/audio/capture_stream/1"),
+            "rt/booster/audio/capture_stream/1"
+        );
+        assert_eq!(
+            capture_frame_topic_name("booster/audio/capture_stream/1"),
+            "rt/booster/audio/capture_stream/1"
+        );
+    }
+
+    #[test]
+    fn capture_frame_conversion() {
+        let msg = AudioCaptureFrameTopic {
+            header: AudioTopicHeader {
+                session_type: 3,
+                session_id: 9,
+                timestamp_ms: 1234,
+                ..AudioTopicHeader::default()
+            },
+            frame_seq: 5,
+            raw_valid: true,
+            raw_sample_rate_hz: 16_000,
+            raw_channels: 3,
+            raw_bits_per_sample: 16,
+            raw_frame_samples_per_channel: 2,
+            raw_pcm: vec![1, 2, 3, 4, 5, 6],
+            ..AudioCaptureFrameTopic::default()
+        };
+        assert_eq!(
+            msg.header.session_type_enum(),
+            Some(SessionType::CaptureStream)
+        );
+        let frame = AudioCaptureFrame::from(msg);
+        assert_eq!(frame.frame_seq, 5);
+        assert_eq!(frame.timestamp_ms, 1234);
+        assert_eq!(frame.raw_format.channels, 3);
+        assert_eq!(frame.raw_pcm.len(), 6);
+        assert!(!frame.naec_valid);
+    }
+
+    #[test]
+    fn error_topic_converts_to_audio_error() {
+        let msg = AudioErrorTopic {
+            ret_code: 7001,
+            error_category: 4,
+            error_detail: 15,
+            ret_msg: "no array".to_owned(),
+            ..AudioErrorTopic::default()
+        };
+        assert_eq!(
+            msg.error_category_enum(),
+            Some(AudioErrorCategory::LocalizationError)
+        );
+        let err = AudioError::from(&msg);
+        assert_eq!(err.ret_code, AUDIO_ERR_NOT_SUPPORTED);
+        assert_eq!(err.detail_enum(), Some(AudioErrorDetail::GetDoaAngle));
+    }
+
+    #[test]
+    fn audio_client_ignores_robot_name() {
+        let client =
+            AudioClient::with_options(RpcClientOptions::default().with_robot_name("r1")).unwrap();
+        assert!(client.options.robot_name.is_none());
+        assert!(!client.is_initialized());
+        let a = client.generate_request_id();
+        let b = client.generate_request_id();
+        assert!(a.starts_with("audio_req_"));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn session_handles_require_init() {
+        let client = Arc::new(AudioClient::new().unwrap());
+        let player = client.create_player();
+        assert_eq!(player.session_id(), None);
+        assert_eq!(player.cached_state(), PlayerState::Idle);
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        assert!(matches!(
+            rt.block_on(player.start()),
+            Err(BoosterError::Validation(_))
+        ));
+
+        let recorder = AudioRecorder::attach(Arc::clone(&client), 11);
+        let progress = AudioProgressTopic {
+            header: AudioTopicHeader {
+                session_type: 1,
+                session_id: 11,
+                ..AudioTopicHeader::default()
+            },
+            position_bytes: 640,
+            duration_bytes: 0,
+            state: 2,
+        };
+        assert!(recorder.apply_progress(&progress));
+        assert_eq!(recorder.cached_state(), RecorderState::Recording);
+        assert_eq!(recorder.cached_info().captured_bytes, 640);
+        // Same id, different session type: not ours.
+        assert!(!player.apply_progress(&progress));
     }
 }
