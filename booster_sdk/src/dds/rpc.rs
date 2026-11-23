@@ -2,6 +2,7 @@
 
 use futures::StreamExt;
 use rustdds::no_key::DataReaderStream;
+use rustdds::{DataWriterStatus, StatusEvented};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,6 +22,10 @@ pub struct RpcClientOptions {
     pub default_timeout: Duration,
     pub startup_wait: Duration,
     pub service_topic: String,
+    /// Optional robot-name suffix. When set (and non-empty), the RPC channel
+    /// becomes `<service_topic>/<robot_name>`, matching the C++
+    /// `Client::Init(robot_name)` overloads.
+    pub robot_name: Option<String>,
 }
 
 impl Default for RpcClientOptions {
@@ -30,9 +35,11 @@ impl Default for RpcClientOptions {
             // 5 s is a safe default for most commands. Mode changes are slow,
             // so change_mode passes its own longer timeout.
             default_timeout: Duration::from_secs(5),
-            // Wait once before the first RPC call so endpoint discovery can settle.
+            // Before the first RPC call, wait at most this long for the request
+            // writer to match the service's reader. Returns as soon as it matches.
             startup_wait: Duration::from_millis(3000),
             service_topic: LOCO_API_TOPIC.to_owned(),
+            robot_name: None,
         }
     }
 }
@@ -50,6 +57,25 @@ impl RpcClientOptions {
     pub fn with_service_topic(mut self, service_topic: impl Into<String>) -> Self {
         self.service_topic = service_topic.into();
         self
+    }
+
+    /// Target a named robot: the channel becomes `<service_topic>/<robot_name>`.
+    /// An empty name selects the default (un-suffixed) channel.
+    #[must_use]
+    pub fn with_robot_name(mut self, robot_name: impl Into<String>) -> Self {
+        let name = robot_name.into();
+        self.robot_name = if name.is_empty() { None } else { Some(name) };
+        self
+    }
+
+    /// The effective service channel, including the robot-name suffix.
+    #[must_use]
+    pub fn resolved_service_topic(&self) -> String {
+        let base = normalize_service_topic(&self.service_topic);
+        match self.robot_name.as_deref() {
+            Some(name) if !name.is_empty() => format!("{base}/{name}"),
+            _ => base,
+        }
     }
 
     #[must_use]
@@ -148,7 +174,7 @@ impl RpcClient {
             domain_id: options.domain_id,
         })?;
 
-        let service_topic = normalize_service_topic(&options.service_topic);
+        let service_topic = options.resolved_service_topic();
         let request_topic = rpc_request_topic(&service_topic);
         let response_topic = rpc_response_topic(&service_topic);
         let request_writer = node.publisher::<RpcReqMsg>(&request_topic)?;
@@ -257,6 +283,58 @@ impl RpcClient {
         })
     }
 
+    /// Send a raw request (`api_id` + JSON body) and return the raw response
+    /// body. Equivalent to the C++ `SendApiRequestWithResponse`.
+    pub async fn send_api_request(&self, api_id: i32, body: impl Into<String>) -> Result<String> {
+        let header = serde_json::json!({ "api_id": api_id }).to_string();
+        self.call_with_header(api_id, header, body.into(), None)
+            .await
+    }
+
+    /// Service topic this client talks to (including any robot-name suffix).
+    #[must_use]
+    pub fn service_topic(&self) -> &str {
+        &self.service_topic
+    }
+
+    /// Wait until the request writer has matched at least one remote reader
+    /// (the service), or until `max_wait` elapses.
+    ///
+    /// Requests are volatile, so a request sent before the match is silently
+    /// lost. Responses are transient-local, so the response side needs no wait.
+    async fn wait_for_service_match(&self, max_wait: Duration) {
+        const POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+        let start = Instant::now();
+        loop {
+            while let Some(status) = self.request_writer.try_recv_status() {
+                if let DataWriterStatus::PublicationMatched { current, .. } = status
+                    && current.count() > 0
+                {
+                    tracing::debug!(
+                        target: "booster_sdk::rpc",
+                        service_topic = %self.service_topic,
+                        elapsed_ms = start.elapsed().as_millis(),
+                        "rpc service matched"
+                    );
+                    return;
+                }
+            }
+
+            if start.elapsed() >= max_wait {
+                tracing::warn!(
+                    target: "booster_sdk::rpc",
+                    service_topic = %self.service_topic,
+                    startup_wait_ms = max_wait.as_millis(),
+                    "rpc service not discovered within startup wait, sending anyway"
+                );
+                return;
+            }
+
+            tokio::time::sleep(POLL_INTERVAL).await;
+        }
+    }
+
     /// Send a request with a pre-built JSON header and return the raw response body.
     ///
     /// Non-zero response statuses are returned as errors.
@@ -270,13 +348,7 @@ impl RpcClient {
         if self.startup_wait > Duration::from_millis(0)
             && !self.startup_wait_done.swap(true, Ordering::SeqCst)
         {
-            tracing::debug!(
-                target: "booster_sdk::rpc",
-                service_topic = %self.service_topic,
-                startup_wait_ms = self.startup_wait.as_millis(),
-                "initial startup wait before first rpc call"
-            );
-            tokio::time::sleep(self.startup_wait).await;
+            self.wait_for_service_match(self.startup_wait).await;
         }
 
         // Single-flight per client: one response stream consumer at a time.

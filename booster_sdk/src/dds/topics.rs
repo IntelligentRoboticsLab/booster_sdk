@@ -44,7 +44,7 @@ pub const TYPE_LIGHT_CONTROL: &str = "booster_interface::msg::dds_::LightControl
 pub const TYPE_SAFE_MODE: &str = "booster_msgs::msg::dds_::BinaryData_";
 pub const TYPE_SUBTITLE: &str = "booster_interface::msg::dds_::Subtitle_";
 pub const TYPE_ASR_CHUNK: &str = "booster_interface::msg::dds_::AsrChunk_";
-pub const TYPE_BLUETOOTH_EVENT: &str = "booster_msgs::audio::BluetoothEventTopic";
+pub const TYPE_BLUETOOTH_EVENT: &str = "booster_msgs::audio::dds_::BluetoothEventTopic_";
 
 pub const LOCO_API_TOPIC: &str = "rt/LocoApiTopic";
 pub const AI_API_TOPIC: &str = "rt/AiApiTopic";

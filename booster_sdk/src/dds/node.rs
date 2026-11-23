@@ -1,5 +1,6 @@
 //! DDS runtime helpers for creating publishers and subscriptions.
 
+use futures::StreamExt;
 use serde::{Serialize, de::DeserializeOwned};
 use std::net::{IpAddr, Ipv4Addr};
 use tokio::sync::mpsc;
@@ -89,19 +90,32 @@ impl DdsNode {
             })?;
 
         let (sender, receiver) = mpsc::channel(buffer);
+        let topic_name = spec.name.to_string();
+        // Dedicated thread so this works with or without a tokio runtime (the
+        // Python bindings call it outside one). The thread sleeps until a sample
+        // arrives or the subscription is dropped.
         std::thread::spawn(move || {
-            let mut reader = reader;
-            loop {
-                match reader.take_next_sample() {
-                    Ok(Some(sample)) => {
-                        if sender.blocking_send(sample.into_value()).is_err() {
-                            break;
+            let mut stream = reader.async_sample_stream();
+            futures::executor::block_on(async move {
+                loop {
+                    let sample = tokio::select! {
+                        biased;
+                        () = sender.closed() => break,
+                        sample = stream.next() => sample,
+                    };
+                    match sample {
+                        Some(Ok(sample)) => {
+                            if sender.send(sample.into_value()).await.is_err() {
+                                break;
+                            }
                         }
+                        Some(Err(err)) => {
+                            tracing::debug!(topic = %topic_name, %err, "dds read error");
+                        }
+                        None => break,
                     }
-                    Ok(None) => std::thread::sleep(std::time::Duration::from_millis(5)),
-                    Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
                 }
-            }
+            });
         });
 
         Ok(DdsSubscription { receiver })
