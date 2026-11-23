@@ -54,7 +54,9 @@ checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
 name = "booster_sdk"
 version = "0.1.3"
 dependencies = [
+ "byteorder",
  "futures",
+ "if-addrs",
  "rustdds",
  "serde",
  "serde_json",
@@ -675,6 +677,13 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "low_level"
+version = "0.1.3"
+dependencies = [
+ "booster_sdk",
 ]
 
 [[package]]
