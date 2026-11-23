@@ -1,6 +1,7 @@
 //! AI and LUI high-level RPC clients.
 
-use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,11 @@ crate::api_id_enum! {
     }
 }
 
+/// DDS channel carrying conversational AI subtitles (C++ `kTopicAiSubtitle`).
+pub const TOPIC_AI_SUBTITLE: &str = "rt/ai_subtitle";
+/// DDS channel carrying standalone LUI ASR chunks (C++ `kTopicLuiAsrChunk`).
+pub const TOPIC_LUI_ASR_CHUNK: &str = "rt/lui_asr_chunk";
+
 /// Maximum text length for [`LuiClient::synthesize_speech`], in Unicode code points.
 pub const LUI_MAX_SYNTHESIZE_TEXT_CODE_POINTS: usize = 1000;
 /// Maximum audio duration for LUI recognition requests, in milliseconds.
@@ -51,29 +57,33 @@ const LUI_SYNTHESIZE_TIMEOUT: Duration = Duration::from_secs(1800);
 const LUI_RECOGNIZE_TIMEOUT: Duration = Duration::from_secs(900);
 
 /// TTS configuration for AI chat.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TtsConfig {
     pub voice_type: String,
     pub ignore_bracket_text: Vec<i8>,
 }
 
 /// LLM prompt configuration for AI chat.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LlmConfig {
     pub system_prompt: String,
     pub welcome_msg: String,
+    /// Backend-defined named prompt or persona preset (empty by default).
     pub prompt_name: String,
 }
 
 /// ASR interruption configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AsrConfig {
     pub interrupt_speech_duration: i32,
     pub interrupt_keywords: Vec<String>,
 }
 
 /// Parameters for starting AI chat.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Default` matches the C++ initializers (`interrupt_mode = false`); the C++
+/// SDK leaves `enable_face_tracking` uninitialized, here it is `false`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StartAiChatParameter {
     /// Optional AgentHub persona identifier.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -86,25 +96,63 @@ pub struct StartAiChatParameter {
 }
 
 /// Parameters for AI speech output.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpeakParameter {
     pub msg: String,
 }
 
+/// Body of a LUI ASR start request (C++ `LuiAsrStartRequest`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LuiAsrStartRequest {
+    pub session_id: String,
+    pub client_id: String,
+}
+
+/// Body of a LUI ASR stop request (C++ `LuiAsrStopRequest`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LuiAsrStopRequest {
+    pub session_id: String,
+    pub client_id: String,
+}
+
+/// Body of a LUI TTS stop request (C++ `LuiTtsStopRequest`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LuiTtsStopRequest {
+    pub session_id: String,
+    pub client_id: String,
+}
+
+macro_rules! session_request_ctor {
+    ($($name:ident),+) => {
+        $(
+            impl $name {
+                pub fn new(session_id: impl Into<String>, client_id: impl Into<String>) -> Self {
+                    Self {
+                        session_id: session_id.into(),
+                        client_id: client_id.into(),
+                    }
+                }
+            }
+        )+
+    };
+}
+
+session_request_ctor!(LuiAsrStartRequest, LuiAsrStopRequest, LuiTtsStopRequest);
+
 /// LUI TTS startup configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LuiTtsConfig {
     pub voice_type: String,
 }
 
 /// Parameters for sending TTS text to LUI.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LuiTtsParameter {
     pub text: String,
 }
 
 /// AI subtitle topic payload.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Subtitle {
     pub magic_number: String,
     pub text: String,
@@ -120,11 +168,44 @@ pub struct Subtitle {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LuiSynthesizeSpeechRequest {
     pub text: String,
+    #[serde(default = "default_voice_type")]
     pub voice_type: String,
     /// Speech speed ratio: 1.0 = normal, 0.5 = slowest, 2.0 = fastest.
+    #[serde(default = "default_speed")]
     pub speed: f64,
     /// Whether the robot should also play the synthesized audio.
+    #[serde(default)]
     pub playback: bool,
+}
+
+fn default_voice_type() -> String {
+    "default".to_owned()
+}
+
+const fn default_speed() -> f64 {
+    1.0
+}
+
+const fn default_sample_rate_hz() -> i32 {
+    16000
+}
+
+const fn default_channels() -> i32 {
+    1
+}
+
+const fn default_bits_per_sample() -> i32 {
+    16
+}
+
+fn default_pcm_format() -> String {
+    "pcm_s16le".to_owned()
+}
+
+impl Default for LuiSynthesizeSpeechRequest {
+    fn default() -> Self {
+        Self::new("")
+    }
 }
 
 impl LuiSynthesizeSpeechRequest {
@@ -149,6 +230,18 @@ pub struct LuiSynthesizeSpeechResponse {
     pub format: String,
 }
 
+impl Default for LuiSynthesizeSpeechResponse {
+    fn default() -> Self {
+        Self {
+            audio_base64: String::new(),
+            sample_rate_hz: default_sample_rate_hz(),
+            channels: default_channels(),
+            bits_per_sample: default_bits_per_sample(),
+            format: default_pcm_format(),
+        }
+    }
+}
+
 /// Audio recognition request for the LUI recognize APIs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LuiRecognizeAudioRequest {
@@ -158,10 +251,28 @@ pub struct LuiRecognizeAudioRequest {
     pub file_path: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub audio_base64: String,
+    #[serde(default = "default_sample_rate_hz")]
     pub sample_rate_hz: i32,
+    #[serde(default = "default_channels")]
     pub channels: i32,
+    #[serde(default = "default_bits_per_sample")]
     pub bits_per_sample: i32,
+    #[serde(default = "default_pcm_format")]
     pub format: String,
+}
+
+impl Default for LuiRecognizeAudioRequest {
+    fn default() -> Self {
+        Self {
+            input_type: String::new(),
+            file_path: String::new(),
+            audio_base64: String::new(),
+            sample_rate_hz: default_sample_rate_hz(),
+            channels: default_channels(),
+            bits_per_sample: default_bits_per_sample(),
+            format: default_pcm_format(),
+        }
+    }
 }
 
 impl LuiRecognizeAudioRequest {
@@ -170,11 +281,7 @@ impl LuiRecognizeAudioRequest {
         Self {
             input_type: "file".to_owned(),
             file_path: file_path.into(),
-            audio_base64: String::new(),
-            sample_rate_hz: 16000,
-            channels: 1,
-            bits_per_sample: 16,
-            format: "pcm_s16le".to_owned(),
+            ..Self::default()
         }
     }
 
@@ -182,24 +289,40 @@ impl LuiRecognizeAudioRequest {
     pub fn from_pcm_base64(audio_base64: impl Into<String>) -> Self {
         Self {
             input_type: "pcm".to_owned(),
+            audio_base64: audio_base64.into(),
+            ..Self::default()
+        }
+    }
+
+    /// Recognize base64-encoded raw PCM with an explicit format
+    /// (full C++ `FromPcmBase64` signature).
+    pub fn from_pcm_base64_with_format(
+        audio_base64: impl Into<String>,
+        sample_rate_hz: i32,
+        channels: i32,
+        bits_per_sample: i32,
+        format: impl Into<String>,
+    ) -> Self {
+        Self {
+            input_type: "pcm".to_owned(),
             file_path: String::new(),
             audio_base64: audio_base64.into(),
-            sample_rate_hz: 16000,
-            channels: 1,
-            bits_per_sample: 16,
-            format: "pcm_s16le".to_owned(),
+            sample_rate_hz,
+            channels,
+            bits_per_sample,
+            format: format.into(),
         }
     }
 }
 
 /// Recognition result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LuiRecognizeAudioResponse {
     pub text: String,
 }
 
 /// Utterance entry inside an [`AsrChunk`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct AsrUtterance {
     pub text: String,
     pub definite: bool,
@@ -215,7 +338,7 @@ pub struct AsrUtterance {
 }
 
 /// LUI ASR chunk topic payload.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct AsrChunk {
     pub session_id: String,
     pub client_id: String,
@@ -249,6 +372,12 @@ impl AiClient {
         Self::with_options(RpcClientOptions::for_service(AI_API_TOPIC))
     }
 
+    /// Target a named robot: requests go to `rt/AiApiTopic/<robot_name>`
+    /// (C++ `Init(robot_name)`). An empty name selects the default topic.
+    pub fn with_robot_name(robot_name: impl Into<String>) -> Result<Self> {
+        Self::with_options(RpcClientOptions::for_service(AI_API_TOPIC).with_robot_name(robot_name))
+    }
+
     /// Create an AI client with a custom startup wait before first RPC.
     pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
         Self::with_options(
@@ -256,7 +385,8 @@ impl AiClient {
         )
     }
 
-    /// Create an AI client with custom RPC options.
+    /// Create an AI client with custom RPC options. The service topic is
+    /// always the AI topic; `options.robot_name` is honored.
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
         let rpc = RpcClient::for_topic(options, AI_API_TOPIC)?;
         Ok(Self { rpc })
@@ -265,6 +395,22 @@ impl AiClient {
     /// Access the underlying DDS node.
     pub fn node(&self) -> &DdsNode {
         self.rpc.node()
+    }
+
+    /// Send a raw request and discard the response body (C++ `SendApiRequest`).
+    pub async fn send_api_request(&self, api_id: impl Into<i32>, param: &str) -> Result<()> {
+        self.rpc.send_api_request(api_id.into(), param).await?;
+        Ok(())
+    }
+
+    /// Send a raw request and return the response body
+    /// (C++ `SendApiRequestWithResponse`).
+    pub async fn send_api_request_with_response(
+        &self,
+        api_id: impl Into<i32>,
+        param: &str,
+    ) -> Result<String> {
+        self.rpc.send_api_request(api_id.into(), param).await
     }
 
     /// Start AI chat with the provided configuration.
@@ -322,6 +468,12 @@ impl LuiClient {
         Self::with_options(RpcClientOptions::for_service(LUI_API_TOPIC))
     }
 
+    /// Target a named robot: requests go to `rt/LuiApiTopic/<robot_name>`
+    /// (C++ `Init(robot_name)`). An empty name selects the default topic.
+    pub fn with_robot_name(robot_name: impl Into<String>) -> Result<Self> {
+        Self::with_options(RpcClientOptions::for_service(LUI_API_TOPIC).with_robot_name(robot_name))
+    }
+
     /// Create a LUI client with a custom startup wait before first RPC.
     pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
         Self::with_options(
@@ -329,7 +481,8 @@ impl LuiClient {
         )
     }
 
-    /// Create a LUI client with custom RPC options.
+    /// Create a LUI client with custom RPC options. The service topic is
+    /// always the LUI topic; `options.robot_name` is honored.
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
         let rpc = RpcClient::for_topic(options, LUI_API_TOPIC)?;
         Ok(Self {
@@ -369,6 +522,43 @@ impl LuiClient {
         self.sessions
             .lock()
             .map_err(|_| BoosterError::Other("LUI session state poisoned".to_owned()))
+    }
+
+    /// Whether `session_id` is an ASR session started (and not yet stopped)
+    /// by the client `client_id` in this process (C++ static
+    /// `LuiClient::IsAsrSessionActive`).
+    ///
+    /// Sessions are tracked in a process-wide registry updated by
+    /// [`Self::start_asr`] and [`Self::stop_asr`]. Empty ids are never active.
+    #[must_use]
+    pub fn is_asr_session_active(session_id: &str, client_id: &str) -> bool {
+        if session_id.is_empty() || client_id.is_empty() {
+            return false;
+        }
+        asr_session_registry()
+            .lock()
+            .map(|registry| {
+                registry
+                    .get(session_id)
+                    .is_some_and(|owner| owner == client_id)
+            })
+            .unwrap_or(false)
+    }
+
+    /// Send a raw request and discard the response body (C++ `SendApiRequest`).
+    pub async fn send_api_request(&self, api_id: impl Into<i32>, param: &str) -> Result<()> {
+        self.rpc.send_api_request(api_id.into(), param).await?;
+        Ok(())
+    }
+
+    /// Send a raw request and return the response body
+    /// (C++ `SendApiRequestWithResponse`).
+    pub async fn send_api_request_with_response(
+        &self,
+        api_id: impl Into<i32>,
+        param: &str,
+    ) -> Result<String> {
+        self.rpc.send_api_request(api_id.into(), param).await
     }
 
     fn session_body(&self, session_id: &str) -> serde_json::Value {
@@ -412,11 +602,14 @@ impl LuiClient {
         }
         let session_id = Uuid::new_v4().to_string();
         self.rpc
-            .call_void(
+            .call_serialized(
                 LuiApiId::StartAsr,
-                self.session_body(&session_id).to_string(),
+                &LuiAsrStartRequest::new(&session_id, &self.client_id),
             )
             .await?;
+        if let Ok(mut registry) = asr_session_registry().lock() {
+            registry.insert(session_id.clone(), self.client_id.clone());
+        }
         self.sessions()?.asr = Some(session_id);
         Ok(())
     }
@@ -427,11 +620,14 @@ impl LuiClient {
             return Ok(());
         };
         self.rpc
-            .call_void(
+            .call_serialized(
                 LuiApiId::StopAsr,
-                self.session_body(&session_id).to_string(),
+                &LuiAsrStopRequest::new(&session_id, &self.client_id),
             )
             .await?;
+        if let Ok(mut registry) = asr_session_registry().lock() {
+            registry.remove(&session_id);
+        }
         self.sessions()?.asr = None;
         Ok(())
     }
@@ -466,9 +662,9 @@ impl LuiClient {
             return Ok(());
         };
         self.rpc
-            .call_void(
+            .call_serialized(
                 LuiApiId::StopTts,
-                self.session_body(&session_id).to_string(),
+                &LuiTtsStopRequest::new(session_id, &self.client_id),
             )
             .await?;
         self.sessions()?.tts = None;
@@ -502,7 +698,7 @@ impl LuiClient {
         &self,
         req: &LuiSynthesizeSpeechRequest,
     ) -> Result<LuiSynthesizeSpeechResponse> {
-        let text_len = req.text.chars().count();
+        let text_len = count_utf8_code_points(&req.text);
         if text_len > LUI_MAX_SYNTHESIZE_TEXT_CODE_POINTS {
             return Err(RpcError::BadRequest(format!(
                 "text length {text_len} exceeds limit {LUI_MAX_SYNTHESIZE_TEXT_CODE_POINTS}"
@@ -597,8 +793,22 @@ impl LuiClient {
     }
 }
 
-/// Decoded byte count of a base64 payload, derived from its length.
-fn estimate_base64_decoded_bytes(base64: &str) -> u64 {
+/// Process-wide `session_id -> client_id` map of active ASR sessions.
+fn asr_session_registry() -> &'static Mutex<HashMap<String, String>> {
+    static REGISTRY: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Number of Unicode code points in `text` (C++ `CountUtf8CodePoints`).
+#[must_use]
+pub fn count_utf8_code_points(text: &str) -> usize {
+    text.chars().count()
+}
+
+/// Decoded byte count of a base64 payload, derived from its length
+/// (C++ `EstimateBase64DecodedBytes`).
+#[must_use]
+pub fn estimate_base64_decoded_bytes(base64: &str) -> u64 {
     let padding = base64.bytes().rev().take_while(|&b| b == b'=').count() as u64;
     (base64.len() as u64 / 4 * 3).saturating_sub(padding)
 }
@@ -682,5 +892,65 @@ mod tests {
         };
         let json = serde_json::to_value(&param).unwrap();
         assert!(json.get("persona_id").is_none());
+        assert_eq!(param, StartAiChatParameter::default());
+    }
+
+    #[test]
+    fn counts_code_points() {
+        assert_eq!(count_utf8_code_points("abc"), 3);
+        assert_eq!(count_utf8_code_points("你好"), 2);
+    }
+
+    #[test]
+    fn asr_registry_tracks_owner() {
+        assert!(!LuiClient::is_asr_session_active("", "c"));
+        assert!(!LuiClient::is_asr_session_active("s-test", "c-test"));
+        asr_session_registry()
+            .lock()
+            .unwrap()
+            .insert("s-test".to_owned(), "c-test".to_owned());
+        assert!(LuiClient::is_asr_session_active("s-test", "c-test"));
+        assert!(!LuiClient::is_asr_session_active("s-test", "other"));
+        asr_session_registry().lock().unwrap().remove("s-test");
+        assert!(!LuiClient::is_asr_session_active("s-test", "c-test"));
+    }
+
+    #[test]
+    fn session_requests_serialize_like_cpp() {
+        assert_eq!(
+            serde_json::to_value(LuiAsrStopRequest::new("s", "c")).unwrap(),
+            serde_json::json!({"session_id": "s", "client_id": "c"})
+        );
+    }
+
+    #[test]
+    fn optional_request_keys_use_cpp_defaults() {
+        let req: LuiSynthesizeSpeechRequest =
+            serde_json::from_value(serde_json::json!({"text": "hi"})).unwrap();
+        assert_eq!(req, LuiSynthesizeSpeechRequest::new("hi"));
+
+        let req: LuiRecognizeAudioRequest =
+            serde_json::from_value(serde_json::json!({"input_type": "pcm"})).unwrap();
+        assert_eq!(req.sample_rate_hz, 16000);
+        assert_eq!(req.channels, 1);
+        assert_eq!(req.bits_per_sample, 16);
+        assert_eq!(req.format, "pcm_s16le");
+
+        let req = LuiRecognizeAudioRequest::from_pcm_base64_with_format(
+            "AAAA",
+            48000,
+            2,
+            16,
+            "pcm_s16le",
+        );
+        assert_eq!(req.sample_rate_hz, 48000);
+        assert_eq!(req.channels, 2);
+
+        let resp = LuiSynthesizeSpeechResponse::default();
+        assert_eq!(
+            (resp.sample_rate_hz, resp.channels, resp.bits_per_sample),
+            (16000, 1, 16)
+        );
+        assert_eq!(resp.format, "pcm_s16le");
     }
 }

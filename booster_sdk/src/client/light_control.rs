@@ -17,7 +17,7 @@ crate::api_id_enum! {
 }
 
 /// RGB color payload for LED control.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetLedLightColorParameter {
     pub r: u8,
     pub g: u8,
@@ -25,7 +25,7 @@ pub struct SetLedLightColorParameter {
 }
 
 /// Multi-pixel LED color payload introduced in SDK 1.7.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetLedLightColorsParameter {
     pub colors: Vec<SetLedLightColorParameter>,
 }
@@ -35,7 +35,7 @@ impl SetLedLightColorParameter {
     #[must_use]
     pub fn from_hex(color: &str) -> Option<Self> {
         let color = color.trim();
-        if color.len() != 7 || !color.starts_with('#') {
+        if color.len() != 7 || !color.is_ascii() || !color.starts_with('#') {
             return None;
         }
 
@@ -44,6 +44,14 @@ impl SetLedLightColorParameter {
         let b = u8::from_str_radix(&color[5..7], 16).ok()?;
 
         Some(Self { r, g, b })
+    }
+
+    /// Parse a `#RRGGBB` color string, falling back to black (`0, 0, 0`) on
+    /// invalid input like the C++ `SetLEDLightColorParameter(const std::string&)`
+    /// constructor.
+    #[must_use]
+    pub fn from_hex_or_default(color: &str) -> Self {
+        Self::from_hex(color).unwrap_or_default()
     }
 }
 
@@ -58,6 +66,15 @@ impl LightControlClient {
         Self::with_options(RpcClientOptions::for_service(LIGHT_CONTROL_API_TOPIC))
     }
 
+    /// Target a named robot: requests go to
+    /// `rt/LightControlApiTopic/<robot_name>` (C++ `Init(robot_name)`).
+    /// An empty name selects the default topic.
+    pub fn with_robot_name(robot_name: impl Into<String>) -> Result<Self> {
+        Self::with_options(
+            RpcClientOptions::for_service(LIGHT_CONTROL_API_TOPIC).with_robot_name(robot_name),
+        )
+    }
+
     /// Create a light control client with a custom startup wait before first RPC.
     pub fn with_startup_wait(startup_wait: Duration) -> Result<Self> {
         Self::with_options(
@@ -69,6 +86,22 @@ impl LightControlClient {
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
         let rpc = RpcClient::for_topic(options, LIGHT_CONTROL_API_TOPIC)?;
         Ok(Self { rpc })
+    }
+
+    /// Send a raw request and discard the response body (C++ `SendApiRequest`).
+    pub async fn send_api_request(&self, api_id: impl Into<i32>, param: &str) -> Result<()> {
+        self.rpc.send_api_request(api_id.into(), param).await?;
+        Ok(())
+    }
+
+    /// Send a raw request and return the response body
+    /// (C++ `SendApiRequestWithResponse`).
+    pub async fn send_api_request_with_response(
+        &self,
+        api_id: impl Into<i32>,
+        param: &str,
+    ) -> Result<String> {
+        self.rpc.send_api_request(api_id.into(), param).await
     }
 
     /// Set LED light color from RGB values.
@@ -122,5 +155,18 @@ mod tests {
             json!({"colors": [{"r": 255, "g": 0, "b": 1}, {"r": 2, "g": 3, "b": 4}]})
         );
         assert_eq!(i32::from(LightApiId::SetLedLightColors), 2002);
+    }
+
+    #[test]
+    fn hex_parsing_falls_back_to_black() {
+        assert_eq!(
+            SetLedLightColorParameter::from_hex("#ff0001"),
+            Some(SetLedLightColorParameter { r: 255, g: 0, b: 1 })
+        );
+        assert_eq!(SetLedLightColorParameter::from_hex("ff0001"), None);
+        assert_eq!(
+            SetLedLightColorParameter::from_hex_or_default("#zz0000"),
+            SetLedLightColorParameter::default()
+        );
     }
 }

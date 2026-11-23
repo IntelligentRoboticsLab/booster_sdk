@@ -36,13 +36,13 @@ crate::api_id_enum! {
 }
 
 /// Parameters for camera mode changes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChangeModeParameter {
     pub mode: i32,
 }
 
 /// Response payload for camera status requests.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GetStatusResponse {
     pub status: i32,
 }
@@ -75,9 +75,28 @@ impl X5CameraClient {
     }
 
     /// Create an X5 camera client with custom RPC options.
+    ///
+    /// The C++ client has no robot-name overload; `options.robot_name` is
+    /// still honored if set.
     pub fn with_options(options: RpcClientOptions) -> Result<Self> {
         let rpc = RpcClient::for_topic(options, X5_CAMERA_CONTROL_API_TOPIC)?;
         Ok(Self { rpc })
+    }
+
+    /// Send a raw request and discard the response body (C++ `SendApiRequest`).
+    pub async fn send_api_request(&self, api_id: impl Into<i32>, param: &str) -> Result<()> {
+        self.rpc.send_api_request(api_id.into(), param).await?;
+        Ok(())
+    }
+
+    /// Send a raw request and return the response body
+    /// (C++ `SendApiRequestWithResponse`).
+    pub async fn send_api_request_with_response(
+        &self,
+        api_id: impl Into<i32>,
+        param: &str,
+    ) -> Result<String> {
+        self.rpc.send_api_request(api_id.into(), param).await
     }
 
     /// Change the camera mode.
