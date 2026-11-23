@@ -33,8 +33,21 @@ let config = DdsConfig::new(0).with_network(DdsNetwork::All);
 | `BOOSTER_DOMAIN_ID` | DDS domain id | `0` |
 | `BOOSTER_DDS_NETWORK` | `localhost`, `all`, or a comma-separated list of interface names and/or IP addresses (e.g. `eth0` or `192.168.10.10`) | `localhost` |
 
-Note that the high-level clients (`BoosterClient`, `AiClient`, ...) currently
-create their DDS node with the default (loopback-only) network.
+The high-level clients (`BoosterClient`, `AiClient`, ...) take the same
+setting through `RpcClientOptions`:
+
+```rust
+use booster_sdk::client::BoosterClient;
+use booster_sdk::dds::{DdsNetwork, RpcClientOptions};
+
+// Explicit interface:
+let options = RpcClientOptions::default()
+    .with_network(DdsNetwork::Interfaces(vec!["eth0".into()]));
+let client = BoosterClient::with_options(options)?;
+
+// Or from BOOSTER_DOMAIN_ID / BOOSTER_DDS_NETWORK:
+let client = BoosterClient::with_options(RpcClientOptions::from_env())?;
+```
 
 ### Network Requirements
 

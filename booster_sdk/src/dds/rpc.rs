@@ -341,6 +341,10 @@ pub struct RpcClientOptions {
     /// becomes `<service_topic>/<robot_name>`, matching the C++
     /// `Client::Init(robot_name)` overloads.
     pub robot_name: Option<String>,
+    /// Network interfaces the client's DDS participant uses. Defaults to
+    /// loopback only (the SDK normally runs on the robot); see
+    /// [`DdsNetwork`](super::DdsNetwork) and `docs/dds_setup.md`.
+    pub network: super::DdsNetwork,
 }
 
 impl Default for RpcClientOptions {
@@ -355,6 +359,7 @@ impl Default for RpcClientOptions {
             startup_wait: Duration::from_millis(3000),
             service_topic: LOCO_API_TOPIC.to_owned(),
             robot_name: None,
+            network: super::DdsNetwork::default(),
         }
     }
 }
@@ -366,6 +371,33 @@ impl RpcClientOptions {
             service_topic: service_topic.into(),
             ..Self::default()
         }
+    }
+
+    /// Options with the domain id and network taken from the environment
+    /// (`BOOSTER_DOMAIN_ID`, `BOOSTER_DDS_NETWORK`); see
+    /// [`DdsConfig::from_env`](super::DdsConfig::from_env).
+    #[must_use]
+    pub fn from_env() -> Self {
+        let config = super::DdsConfig::from_env();
+        Self {
+            domain_id: config.domain_id,
+            network: config.network,
+            ..Self::default()
+        }
+    }
+
+    /// Select the DDS network interfaces (e.g. to control the robot from
+    /// another machine).
+    #[must_use]
+    pub fn with_network(mut self, network: super::DdsNetwork) -> Self {
+        self.network = network;
+        self
+    }
+
+    #[must_use]
+    pub fn with_domain_id(mut self, domain_id: u16) -> Self {
+        self.domain_id = domain_id;
+        self
     }
 
     #[must_use]
@@ -478,18 +510,21 @@ pub(crate) fn preview_for_log(value: &str, max_chars: usize) -> String {
     preview.replace('\n', "\\n")
 }
 
+impl RpcClientOptions {
+    /// The DDS participant configuration these options describe.
+    #[must_use]
+    pub fn dds_config(&self) -> super::DdsConfig {
+        super::DdsConfig::new(self.domain_id).with_network(self.network.clone())
+    }
+}
+
 impl RpcClient {
     pub fn for_topic(options: RpcClientOptions, service_topic: impl Into<String>) -> Result<Self> {
         Self::new(options.with_service_topic(service_topic))
     }
 
-    // `..Default::default()` keeps this compiling if `DdsConfig` grows fields.
-    #[allow(clippy::needless_update)]
     pub fn new(options: RpcClientOptions) -> Result<Self> {
-        let node = DdsNode::new(super::DdsConfig {
-            domain_id: options.domain_id,
-            ..Default::default()
-        })?;
+        let node = DdsNode::new(options.dds_config())?;
         Self::with_node(&node, &options)
     }
 
