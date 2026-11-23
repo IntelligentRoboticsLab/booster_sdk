@@ -338,6 +338,10 @@ impl PyWholeBodyDanceId {
     const GAI_GE_CHUN_FENG_DANCE: Self = Self(WholeBodyDanceId::GaiGeChunFengDance);
     #[classattr]
     const MICHAEL_DANCE_1_AND_2: Self = Self(WholeBodyDanceId::MichaelDance1And2);
+    #[classattr]
+    const BOW_AND_ARROW: Self = Self(WholeBodyDanceId::BowAndArrow);
+    #[classattr]
+    const CHARLESTON_DANCE: Self = Self(WholeBodyDanceId::CharlestonDance);
 
     fn __repr__(&self) -> String {
         match self.0 {
@@ -356,6 +360,8 @@ impl PyWholeBodyDanceId {
             WholeBodyDanceId::MichaelDance1And2 => {
                 "WholeBodyDanceId.MICHAEL_DANCE_1_AND_2".to_string()
             }
+            WholeBodyDanceId::BowAndArrow => "WholeBodyDanceId.BOW_AND_ARROW".to_string(),
+            WholeBodyDanceId::CharlestonDance => "WholeBodyDanceId.CHARLESTON_DANCE".to_string(),
         }
     }
 

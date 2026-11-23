@@ -15,9 +15,9 @@ use crate::dds::{
 use crate::types::{
     BoosterHandType, CustomTrainedTraj, DanceId, DeviceInfo, DeviceInfoKind,
     DexterousFingerParameter, Frame, GaitType, GetModeResponse, GetRobotInfoResponse,
-    GetStatusResponse, GetTrainedTrajStatusResponse, GetUpVersion, GripperControlMode, GripperMode, GripperMotionParameter, Hand,
-    HandAction, HandIndex, LoadCustomTrainedTrajResponse, LocoApiId, Result, RobotMode, Transform,
-    VisualKickVersion, WholeBodyDanceId,
+    GetStatusResponse, GetTrainedTrajStatusResponse, GetUpVersion, GripperControlMode, GripperMode,
+    GripperMotionParameter, Hand, HandAction, HandIndex, LoadCustomTrainedTrajResponse, LocoApiId,
+    Result, RobotMode, Transform, VisualKickVersion, WholeBodyDanceId,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
