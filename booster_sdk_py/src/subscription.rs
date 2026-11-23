@@ -5,9 +5,6 @@
 //! [`PySubscription::new`], passing a function that converts each Rust sample
 //! into its Python class.
 
-// Constructors are used by the client bindings as they add subscriptions.
-#![allow(dead_code)]
-
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 

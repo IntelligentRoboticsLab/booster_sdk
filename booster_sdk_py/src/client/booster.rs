@@ -13,7 +13,11 @@ use booster_sdk::{
 };
 use pyo3::{Bound, prelude::*, types::PyModule};
 
-use crate::{json_value_to_py, runtime::wait_for_future, startup_wait_from_seconds, to_py_err};
+use crate::{
+    json_value_to_py, runtime::wait_for_future, startup_wait_from_seconds,
+    subscription::PySubscription, to_py_err,
+};
+use booster_sdk::dds::Odometer;
 
 #[pyclass(module = "booster_sdk_bindings", name = "RobotMode", eq)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1447,6 +1451,32 @@ impl From<LoadCustomTrainedTrajResponse> for PyLoadCustomTrainedTrajResponse {
     }
 }
 
+/// Planar odometry sample (`rt/odometer_state`).
+#[pyclass(module = "booster_sdk_bindings", name = "Odometer", get_all)]
+#[derive(Clone, Copy)]
+pub struct PyOdometer {
+    x: f32,
+    y: f32,
+    theta: f32,
+}
+
+#[pymethods]
+impl PyOdometer {
+    fn __repr__(&self) -> String {
+        format!("Odometer(x={}, y={}, theta={})", self.x, self.y, self.theta)
+    }
+}
+
+impl From<Odometer> for PyOdometer {
+    fn from(value: Odometer) -> Self {
+        Self {
+            x: value.x,
+            y: value.y,
+            theta: value.theta,
+        }
+    }
+}
+
 #[pyclass(module = "booster_sdk_bindings", name = "BoosterClient", unsendable)]
 pub struct PyBoosterClient {
     client: Arc<BoosterClient>,
@@ -1467,6 +1497,12 @@ impl PyBoosterClient {
         Ok(Self {
             client: Arc::new(client),
         })
+    }
+
+    /// Subscribe to planar odometry (`rt/odometer_state`).
+    fn subscribe_odometer(&self) -> PyResult<PySubscription> {
+        let subscription = self.client.subscribe_odometer().map_err(to_py_err)?;
+        Ok(PySubscription::of::<Odometer, PyOdometer>(subscription))
     }
 
     fn change_mode(&self, py: Python<'_>, mode: PyRobotMode) -> PyResult<()> {
@@ -1970,6 +2006,7 @@ impl PyBoosterClient {
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRobotMode>()?;
+    m.add_class::<PyOdometer>()?;
     m.add_class::<PyHand>()?;
     m.add_class::<PyGripperMode>()?;
     m.add_class::<PyHandAction>()?;

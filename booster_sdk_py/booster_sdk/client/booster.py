@@ -6,6 +6,8 @@ import booster_sdk_bindings as bindings
 
 BoosterClient = bindings.BoosterClient
 BoosterSdkError = bindings.BoosterSdkError
+Odometer = bindings.Odometer
+Subscription = bindings.Subscription
 RobotMode = bindings.RobotMode
 Hand = bindings.Hand
 GripperMode = bindings.GripperMode
@@ -42,6 +44,8 @@ LoadCustomTrainedTrajResponse = bindings.LoadCustomTrainedTrajResponse
 __all__ = [
     "BoosterClient",
     "BoosterSdkError",
+    "Odometer",
+    "Subscription",
     "RobotMode",
     "Hand",
     "GripperMode",

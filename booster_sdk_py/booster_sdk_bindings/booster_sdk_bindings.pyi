@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, Iterator
+
 BOOSTER_ROBOT_USER_ID: str
 
 class BoosterSdkError(Exception):
@@ -937,6 +939,46 @@ class DetectResults:
         """Mean RGB values over the detection region."""
         ...
 
+class Subscription:
+    """A DDS topic subscription.
+
+    Samples are returned as the topic's message class. ``recv`` blocks with the
+    GIL released; iteration yields samples until the subscription is closed.
+    """
+
+    def recv(self, timeout: float | None = None) -> Any | None:
+        """Wait for the next sample; ``None`` on timeout or once closed."""
+        ...
+
+    def try_recv(self) -> Any | None:
+        """Return the next queued sample, or ``None`` if none is pending."""
+        ...
+
+    def latest(self) -> Any | None:
+        """Drain the queue and return only the newest sample, or ``None``."""
+        ...
+
+    def matched_publications(self) -> int:
+        """Number of remote publishers currently matched."""
+        ...
+
+    def close(self) -> None:
+        """Stop receiving and release the DDS reader."""
+        ...
+
+    def is_closed(self) -> bool: ...
+    def __iter__(self) -> Iterator[Any]: ...
+    def __next__(self) -> Any: ...
+    def __enter__(self) -> Subscription: ...
+    def __exit__(self, *args: object) -> None: ...
+
+class Odometer:
+    """Planar odometry sample (``rt/odometer_state``)."""
+
+    x: float
+    y: float
+    theta: float
+
 class BoosterClient:
     """High-level locomotion and body-control client for the robot."""
 
@@ -947,6 +989,10 @@ class BoosterClient:
             startup_wait_sec: Optional one-time wait before the first RPC call.
                 ``None`` uses SDK default startup wait.
         """
+        ...
+
+    def subscribe_odometer(self) -> Subscription:
+        """Subscribe to planar odometry; samples are :class:`Odometer`."""
         ...
 
     def change_mode(self, mode: RobotMode) -> None:
