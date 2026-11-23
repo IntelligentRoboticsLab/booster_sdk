@@ -51,7 +51,6 @@ impl BoosterClient {
         Self::with_options(RpcClientOptions::default().with_startup_wait(startup_wait))
     }
 
-    /// Create a locomotion client with custom RPC options.
     /// Create a client for a named robot (`rt/LocoApiTopic/<robot_name>`).
     ///
     /// Equivalent to the C++ `B1LocoClient::Init(robot_name)`. An empty name

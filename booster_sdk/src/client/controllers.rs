@@ -69,6 +69,32 @@ where
     Err(last_err.unwrap_or_else(|| BoosterError::Other(format!("'{description}' failed"))))
 }
 
+/// Run a cleanup future from `Drop`: on the current tokio runtime if there is
+/// one, otherwise on a short-lived background thread with its own runtime.
+fn run_detached<F>(future: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(future);
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("booster-controller-cleanup".to_owned())
+        .spawn(move || {
+            match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(runtime) => runtime.block_on(future),
+                Err(err) => tracing::warn!("controller cleanup runtime failed: {err}"),
+            }
+        });
+    if let Err(err) = spawned {
+        tracing::warn!("controller cleanup thread failed: {err}");
+    }
+}
+
 fn normalize_angle(mut angle: f32) -> f32 {
     const TWO_PI: f32 = 2.0 * PI;
     while angle > PI {
@@ -309,13 +335,11 @@ impl Drop for MoveController {
         if self.closed {
             return;
         }
-        // Best effort: send a stop on the current runtime, if any.
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            let client = Arc::clone(&self.client);
-            handle.spawn(async move {
-                let _ = client.move_command(0.0, 0.0, 0.0).await;
-            });
-        }
+        // Best effort: send a stop without blocking the dropping thread.
+        let client = Arc::clone(&self.client);
+        run_detached(async move {
+            let _ = client.move_command(0.0, 0.0, 0.0).await;
+        });
     }
 }
 
@@ -587,13 +611,11 @@ impl Drop for ArmController {
         if self.closed {
             return;
         }
-        // Best effort: disable upper-body custom control on the current runtime.
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            let client = Arc::clone(&self.client);
-            handle.spawn(async move {
-                let _ = client.upper_body_custom_control(false).await;
-            });
-        }
+        // Best effort: disable upper-body custom control without blocking.
+        let client = Arc::clone(&self.client);
+        run_detached(async move {
+            let _ = client.upper_body_custom_control(false).await;
+        });
     }
 }
 
