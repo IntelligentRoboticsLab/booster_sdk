@@ -1,11 +1,12 @@
 //! Asynchronous RPC operations (SDK 1.8).
 //!
 //! An operation is started with a regular RPC request whose header carries
-//! `call_mode = 1` (operation), `operation_command = 1` (start) and a
-//! client-generated `operation_id`. The start response only says whether the
-//! service accepted the operation. Progress and the final result are published
-//! afterwards on a separate `*OperationEvent` topic as `RpcRespMsg` samples
-//! whose `uuid` is the operation id.
+//! `call_mode = 1` (operation), `operation_command = 1` (start), the request
+//! UUID as `req_id` and a client-generated `operation_id`. The start response
+//! only says whether the service accepted the operation. Progress and the
+//! final result are published afterwards on a separate `*OperationEvent` topic
+//! as `RpcRespMsg` samples whose `uuid` is the operation id and whose header is
+//! `{"event_type", "result_code", "api_id", "operation_id", "status", "message"}`.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -15,23 +16,19 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::types::{Result, RpcError};
+use crate::types::{
+    BoosterError, RPC_STATUS_CODE_INTERNAL_SERVER_ERROR, RPC_STATUS_CODE_INVALID,
+    RPC_STATUS_CODE_SUCCESS, Result, RpcError,
+};
 
 use super::messages::RpcRespMsg;
 use super::node::DdsNode;
 use super::qos::qos_reliable_keep_last;
-use super::rpc::RpcClient;
+use super::rpc::{MatchCount, RequestHeader, RpcClient, RpcOperationCommand, json_i64, poll_until};
 use super::topics::{TYPE_RPC_RESP, TopicSpec};
 
 /// Default time to wait for the service to accept an operation.
 pub const DEFAULT_OPERATION_START_TIMEOUT: Duration = Duration::from_millis(1000);
-
-const CALL_MODE_OPERATION: i32 = 1;
-const OPERATION_COMMAND_START: i32 = 1;
-const OPERATION_COMMAND_CANCEL: i32 = 2;
-
-const EVENT_TYPE_PROGRESS: i64 = 1;
-const EVENT_TYPE_FINISHED: i64 = 2;
 
 /// Event topic for an operation-capable RPC service.
 pub fn operation_event_topic(name: &str) -> TopicSpec {
@@ -43,9 +40,39 @@ pub fn operation_event_topic(name: &str) -> TopicSpec {
     }
 }
 
+/// Kind of operation event (C++ `ApiOperationEventType`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum ApiOperationEventType {
+    #[default]
+    Unknown,
+    Progress,
+    Finished,
+}
+
+impl From<i64> for ApiOperationEventType {
+    fn from(value: i64) -> Self {
+        match value {
+            1 => Self::Progress,
+            2 => Self::Finished,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl From<ApiOperationEventType> for i32 {
+    fn from(value: ApiOperationEventType) -> Self {
+        match value {
+            ApiOperationEventType::Unknown => 0,
+            ApiOperationEventType::Progress => 1,
+            ApiOperationEventType::Finished => 2,
+        }
+    }
+}
+
 /// Final outcome of an asynchronous operation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ApiOperationResultCode {
+    #[default]
     Unknown,
     Succeeded,
     Aborted,
@@ -88,7 +115,7 @@ pub struct ApiOperationHandle {
 }
 
 /// Intermediate progress published while an operation runs.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ApiOperationProgress {
     pub operation_id: String,
     pub api_id: i64,
@@ -98,7 +125,7 @@ pub struct ApiOperationProgress {
 }
 
 /// Final result of an operation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ApiOperationResult {
     pub code: ApiOperationResultCode,
     pub operation_id: String,
@@ -130,6 +157,87 @@ impl ApiOperationResult {
             return Err(RpcError::RequestFailed { status, message }.into());
         }
         Err(RpcError::from_status_code(status, message).into())
+    }
+}
+
+/// Outcome of the start RPC (C++ `ApiOperationStartResult`).
+///
+/// `status == 0` means the service accepted the operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiOperationStartResult {
+    pub status: i32,
+    pub operation_id: String,
+    pub api_id: i64,
+    pub message: String,
+    /// Set when the operation was accepted.
+    pub handle: Option<ApiOperationHandle>,
+}
+
+/// Local submit outcome (C++ `ApiOperationSubmitResult`).
+///
+/// `status == 0` means the SDK created the operation id and started the start
+/// RPC in the background.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiOperationSubmitResult {
+    pub status: i32,
+    pub operation_id: String,
+    pub message: String,
+    pub handle: Option<ApiOperationHandle>,
+}
+
+/// Called once with the start RPC outcome.
+pub type StartCallback = Box<dyn FnOnce(&ApiOperationStartResult) + Send>;
+/// Called for every progress event.
+pub type ProgressCallback = Box<dyn FnMut(&ApiOperationHandle, &ApiOperationProgress) + Send>;
+/// Called once with the final result (also when the start was rejected).
+pub type ResultCallback = Box<dyn FnOnce(&ApiOperationResult) + Send>;
+
+/// Callbacks for [`RpcOperationClient::run_with_callbacks`] /
+/// [`RpcOperationClient::submit`] (C++ `SendApiRequestOptions`).
+pub struct SendApiRequestOptions {
+    pub start_callback: Option<StartCallback>,
+    pub progress_callback: Option<ProgressCallback>,
+    pub result_callback: Option<ResultCallback>,
+    pub start_timeout: Duration,
+}
+
+impl Default for SendApiRequestOptions {
+    fn default() -> Self {
+        Self {
+            start_callback: None,
+            progress_callback: None,
+            result_callback: None,
+            start_timeout: DEFAULT_OPERATION_START_TIMEOUT,
+        }
+    }
+}
+
+impl SendApiRequestOptions {
+    #[must_use]
+    pub fn on_start(mut self, callback: impl FnOnce(&ApiOperationStartResult) + Send + 'static) -> Self {
+        self.start_callback = Some(Box::new(callback));
+        self
+    }
+
+    #[must_use]
+    pub fn on_progress(
+        mut self,
+        callback: impl FnMut(&ApiOperationHandle, &ApiOperationProgress) + Send + 'static,
+    ) -> Self {
+        self.progress_callback = Some(Box::new(callback));
+        self
+    }
+
+    #[must_use]
+    pub fn on_result(mut self, callback: impl FnOnce(&ApiOperationResult) + Send + 'static) -> Self {
+        self.result_callback = Some(Box::new(callback));
+        self
+    }
+
+    #[must_use]
+    pub fn with_start_timeout(mut self, start_timeout: Duration) -> Self {
+        self.start_timeout = start_timeout;
+        self
     }
 }
 
@@ -204,6 +312,14 @@ impl Drop for ApiOperation {
 /// the service's operation events to the matching [`ApiOperation`].
 pub struct RpcOperationClient {
     registry: Arc<Registry>,
+    event_matches: Arc<MatchCount>,
+}
+
+fn error_status(err: &BoosterError) -> i32 {
+    match err {
+        BoosterError::Rpc(rpc) => rpc.status_code(),
+        _ => RPC_STATUS_CODE_INTERNAL_SERVER_ERROR,
+    }
 }
 
 impl RpcOperationClient {
@@ -212,14 +328,20 @@ impl RpcOperationClient {
         let mut reader =
             node.subscribe_reader::<RpcRespMsg>(&operation_event_topic(event_topic))?;
         let registry: Arc<Registry> = Arc::new(Mutex::new(HashMap::new()));
+        let event_matches = Arc::new(MatchCount::default());
         let weak = Arc::downgrade(&registry);
+        let matches = Arc::clone(&event_matches);
         let topic = event_topic.to_owned();
 
         std::thread::spawn(move || {
+            use rustdds::StatusEvented;
             loop {
                 let Some(registry) = weak.upgrade() else {
                     break;
                 };
+                while let Some(status) = reader.try_recv_status() {
+                    matches.apply_reader_status(&status);
+                }
                 match reader.take_next_sample() {
                     Ok(Some(sample)) => dispatch_event(&registry, &topic, sample.into_value()),
                     Ok(None) => {
@@ -234,7 +356,32 @@ impl RpcOperationClient {
             }
         });
 
-        Ok(Self { registry })
+        Ok(Self {
+            registry,
+            event_matches,
+        })
+    }
+
+    /// Whether the event reader has matched the service's event writer.
+    #[must_use]
+    pub fn is_event_path_matched(&self) -> bool {
+        self.event_matches.is_matched()
+    }
+
+    /// Wait for the RPC service and, with `require_event_path`, for the event
+    /// writer to be discovered (C++ `RpcOperationClient::WaitForService`).
+    ///
+    /// C++ defaults: [`super::DEFAULT_WAIT_FOR_SERVICE_TIMEOUT`], `true`.
+    pub async fn wait_for_service(
+        &self,
+        rpc: &RpcClient,
+        timeout: Duration,
+        require_event_path: bool,
+    ) -> bool {
+        poll_until(timeout, || {
+            rpc.is_service_matched(true) && (!require_event_path || self.is_event_path_matched())
+        })
+        .await
     }
 
     /// Start an operation and wait up to `start_timeout` for the service to accept it.
@@ -245,7 +392,24 @@ impl RpcOperationClient {
         body: impl Into<String>,
         start_timeout: Duration,
     ) -> Result<ApiOperation> {
-        let operation_id = Uuid::new_v4().to_string();
+        self.start_with_id(
+            rpc,
+            Uuid::new_v4().to_string(),
+            api_id,
+            body.into(),
+            start_timeout,
+        )
+        .await
+    }
+
+    async fn start_with_id(
+        &self,
+        rpc: &RpcClient,
+        operation_id: String,
+        api_id: i32,
+        body: String,
+        start_timeout: Duration,
+    ) -> Result<ApiOperation> {
         let (sender, events) = mpsc::unbounded_channel();
 
         // Register before sending so early events are not lost.
@@ -263,10 +427,9 @@ impl RpcOperationClient {
             registry: Arc::clone(&self.registry),
         };
 
-        let header = operation_header(api_id, OPERATION_COMMAND_START, &operation_id);
+        let header = RequestHeader::operation(api_id, RpcOperationCommand::Start, operation_id);
         // On failure `operation` is dropped, which unregisters it.
-        rpc.call_with_header(api_id, header, body.into(), Some(start_timeout))
-            .await?;
+        rpc.send_request(header, body, Some(start_timeout)).await?;
 
         Ok(operation)
     }
@@ -280,65 +443,205 @@ impl RpcOperationClient {
         handle: &ApiOperationHandle,
         timeout: Option<Duration>,
     ) -> Result<()> {
-        let header = operation_header(
+        let header = RequestHeader::operation(
             handle.api_id,
-            OPERATION_COMMAND_CANCEL,
-            &handle.operation_id,
+            RpcOperationCommand::Cancel,
+            handle.operation_id.clone(),
         );
-        rpc.call_with_header(handle.api_id, header, String::new(), timeout)
-            .await?;
+        rpc.send_request(header, String::new(), timeout).await?;
         Ok(())
+    }
+
+    /// Start an operation and drive it to completion, invoking the callbacks
+    /// in `options` (C++ `AsyncSendApiRequest` with `SendApiRequestOptions`).
+    ///
+    /// The start callback always runs once. If the start is rejected or fails
+    /// the result callback receives a `Rejected` result carrying the start
+    /// status. Returns the final result.
+    pub async fn run_with_callbacks(
+        &self,
+        rpc: &RpcClient,
+        api_id: i32,
+        body: impl Into<String>,
+        options: SendApiRequestOptions,
+    ) -> ApiOperationResult {
+        self.run_with_id(rpc, Uuid::new_v4().to_string(), api_id, body.into(), options)
+            .await
+    }
+
+    /// Spawn [`Self::run_with_callbacks`] on the current tokio runtime and
+    /// return immediately (C++ `AsyncSendApiRequest`).
+    ///
+    /// Returns status 500 when called outside a tokio runtime.
+    pub fn submit(
+        self: &Arc<Self>,
+        rpc: Arc<RpcClient>,
+        api_id: i32,
+        body: impl Into<String>,
+        options: SendApiRequestOptions,
+    ) -> ApiOperationSubmitResult {
+        let operation_id = Uuid::new_v4().to_string();
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return ApiOperationSubmitResult {
+                status: RPC_STATUS_CODE_INTERNAL_SERVER_ERROR,
+                operation_id,
+                message: "no tokio runtime available".to_owned(),
+                handle: None,
+            };
+        };
+        let handle = ApiOperationHandle {
+            operation_id: operation_id.clone(),
+            api_id,
+        };
+        let this = Arc::clone(self);
+        let body = body.into();
+        let id = operation_id.clone();
+        runtime.spawn(async move {
+            this.run_with_id(&rpc, id, api_id, body, options).await;
+        });
+        ApiOperationSubmitResult {
+            status: RPC_STATUS_CODE_SUCCESS,
+            operation_id,
+            message: String::new(),
+            handle: Some(handle),
+        }
+    }
+
+    async fn run_with_id(
+        &self,
+        rpc: &RpcClient,
+        operation_id: String,
+        api_id: i32,
+        body: String,
+        mut options: SendApiRequestOptions,
+    ) -> ApiOperationResult {
+        let started = self
+            .start_with_id(rpc, operation_id.clone(), api_id, body, options.start_timeout)
+            .await;
+
+        let mut operation = match started {
+            Ok(operation) => {
+                if let Some(callback) = options.start_callback.take() {
+                    callback(&ApiOperationStartResult {
+                        status: RPC_STATUS_CODE_SUCCESS,
+                        operation_id: operation_id.clone(),
+                        api_id: i64::from(api_id),
+                        message: String::new(),
+                        handle: Some(operation.handle().clone()),
+                    });
+                }
+                operation
+            }
+            Err(err) => {
+                let status = error_status(&err);
+                let message = err.to_string();
+                if let Some(callback) = options.start_callback.take() {
+                    callback(&ApiOperationStartResult {
+                        status,
+                        operation_id: operation_id.clone(),
+                        api_id: i64::from(api_id),
+                        message: message.clone(),
+                        handle: None,
+                    });
+                }
+                let result = ApiOperationResult {
+                    code: ApiOperationResultCode::Rejected,
+                    operation_id,
+                    api_id: i64::from(api_id),
+                    status: i64::from(status),
+                    message,
+                    body: String::new(),
+                };
+                if let Some(callback) = options.result_callback.take() {
+                    callback(&result);
+                }
+                return result;
+            }
+        };
+
+        let handle = operation.handle().clone();
+        let result = loop {
+            match operation.next_event().await {
+                Some(ApiOperationEvent::Progress(progress)) => {
+                    if let Some(callback) = options.progress_callback.as_mut() {
+                        callback(&handle, &progress);
+                    }
+                }
+                Some(ApiOperationEvent::Finished(result)) => break result,
+                None => {
+                    break ApiOperationResult {
+                        code: ApiOperationResultCode::Unknown,
+                        operation_id: operation_id.clone(),
+                        api_id: i64::from(api_id),
+                        status: i64::from(RPC_STATUS_CODE_INVALID),
+                        message: "operation event stream closed".to_owned(),
+                        body: String::new(),
+                    };
+                }
+            }
+        };
+        if let Some(callback) = options.result_callback.take() {
+            callback(&result);
+        }
+        result
     }
 }
 
-fn operation_header(api_id: i32, command: i32, operation_id: &str) -> String {
-    serde_json::json!({
+/// Build an operation event sample (C++ `RpcOperationServer::PublishOperationEvent`).
+pub(crate) fn encode_event(
+    operation_id: &str,
+    api_id: i64,
+    event_type: ApiOperationEventType,
+    result_code: ApiOperationResultCode,
+    status: i64,
+    message: &str,
+    body: &str,
+) -> RpcRespMsg {
+    let header = serde_json::json!({
+        "event_type": i32::from(event_type),
+        "result_code": i32::from(result_code),
         "api_id": api_id,
-        "call_mode": CALL_MODE_OPERATION,
-        "operation_command": command,
         "operation_id": operation_id,
-    })
-    .to_string()
-}
-
-fn parse_i64(value: Option<&Value>) -> Option<i64> {
-    match value? {
-        Value::Number(n) => n.as_i64(),
-        Value::String(s) => s.parse().ok(),
-        _ => None,
+        "status": status,
+        "message": message,
+    });
+    RpcRespMsg {
+        uuid: operation_id.to_owned(),
+        header: header.to_string(),
+        body: body.to_owned(),
     }
 }
 
 fn parse_event(msg: RpcRespMsg) -> Option<ApiOperationEvent> {
     let header: Value = serde_json::from_str(msg.header.trim()).ok()?;
-    let api_id = parse_i64(header.get("api_id")).unwrap_or(0);
-    let status = parse_i64(header.get("status")).unwrap_or(0);
+    let api_id = json_i64(header.get("api_id")).unwrap_or(0);
+    let status = json_i64(header.get("status")).unwrap_or(0);
     let message = header
         .get("message")
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_owned();
 
-    match parse_i64(header.get("event_type"))? {
-        EVENT_TYPE_PROGRESS => Some(ApiOperationEvent::Progress(ApiOperationProgress {
+    match ApiOperationEventType::from(json_i64(header.get("event_type"))?) {
+        ApiOperationEventType::Progress => {
+            Some(ApiOperationEvent::Progress(ApiOperationProgress {
+                operation_id: msg.uuid,
+                api_id,
+                status,
+                message,
+                body: msg.body,
+            }))
+        }
+        ApiOperationEventType::Finished => Some(ApiOperationEvent::Finished(ApiOperationResult {
+            code: json_i64(header.get("result_code"))
+                .map_or(ApiOperationResultCode::Unknown, ApiOperationResultCode::from),
             operation_id: msg.uuid,
             api_id,
             status,
             message,
             body: msg.body,
         })),
-        EVENT_TYPE_FINISHED => Some(ApiOperationEvent::Finished(ApiOperationResult {
-            code: parse_i64(header.get("result_code")).map_or(
-                ApiOperationResultCode::Unknown,
-                ApiOperationResultCode::from,
-            ),
-            operation_id: msg.uuid,
-            api_id,
-            status,
-            message,
-            body: msg.body,
-        })),
-        _ => None,
+        ApiOperationEventType::Unknown => None,
     }
 }
 
@@ -383,12 +686,14 @@ mod tests {
 
     #[test]
     fn operation_header_contains_operation_fields() {
-        let header: Value =
-            serde_json::from_str(&operation_header(2031, OPERATION_COMMAND_START, "abc")).unwrap();
+        let header: Value = RequestHeader::operation(2031, RpcOperationCommand::Start, "abc")
+            .with_req_id("req")
+            .to_json();
         assert_eq!(header["api_id"], 2031);
         assert_eq!(header["call_mode"], 1);
         assert_eq!(header["operation_command"], 1);
         assert_eq!(header["operation_id"], "abc");
+        assert_eq!(header["req_id"], "req");
     }
 
     #[test]
@@ -419,6 +724,29 @@ mod tests {
         assert_eq!(result.code, ApiOperationResultCode::Canceled);
         assert!(!result.is_success());
         assert!(result.into_body().is_err());
+    }
+
+    #[test]
+    fn encoded_events_round_trip() {
+        let encoded = encode_event(
+            "op-9",
+            1100,
+            ApiOperationEventType::Finished,
+            ApiOperationResultCode::Succeeded,
+            0,
+            "done",
+            "{\"x\":1}",
+        );
+        let header: Value = serde_json::from_str(&encoded.header).unwrap();
+        assert_eq!(header["event_type"], 2);
+        assert_eq!(header["result_code"], 1);
+        assert_eq!(header["operation_id"], "op-9");
+        let Some(ApiOperationEvent::Finished(result)) = parse_event(encoded) else {
+            panic!("expected result");
+        };
+        assert_eq!(result.operation_id, "op-9");
+        assert_eq!(result.message, "done");
+        assert!(result.is_success());
     }
 
     #[test]
