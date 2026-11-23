@@ -3,12 +3,14 @@
 pub mod ai;
 pub mod audio;
 pub mod camera;
+pub mod controllers;
 pub mod handeye_calib;
 pub mod light_control;
 pub mod loco;
 pub mod vision;
 pub mod x5_camera;
 
+pub use controllers::{ArmController, ArmJoint, MoveController};
 pub use loco::BoosterClient;
 
 /// Declare an i32-backed enum with serde, `From<i32>`, and `TryFrom<i32>`.

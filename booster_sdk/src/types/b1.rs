@@ -398,6 +398,12 @@ impl GetTrainedTrajStatusResponse {
     pub fn is_running(&self) -> bool {
         self.status == 1
     }
+
+    /// Typed status, if the value is known.
+    #[must_use]
+    pub fn status_enum(&self) -> Option<super::TrainedTrajStatus> {
+        super::TrainedTrajStatus::try_from(self.status).ok()
+    }
 }
 
 /// Convenience alias matching the C++ naming.

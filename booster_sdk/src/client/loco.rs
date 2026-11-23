@@ -12,6 +12,14 @@ use crate::dds::{
     light_control_topic, motion_state_topic, process_state_topic, remote_controller_topic,
     safe_mode_topic, video_stream_topic,
 };
+use crate::dds::{
+    FallDownState, HandReplyData, HandTouchData, Kick, LowCmd, LowState, Odometer,
+    ProneBodyControlStatus, RobocupBehaviorStatus, RobotReplayTrajID, RobotStatesMsg, TFMessage,
+    TrainedTrajStatus, booster_hand_data_topic, fall_down_topic, hand_touch_data_topic,
+    joint_ctrl_topic, kick_ball_topic, low_state_topic, odometer_state_topic,
+    prone_body_control_status_topic, robocup_behavior_status_topic, robot_replay_traj_id_topic,
+    robot_states_topic, tf_topic, trained_traj_status_topic,
+};
 use crate::types::{
     BoosterHandType, CustomTrainedTraj, DanceId, DeviceInfo, DeviceInfoKind,
     DexterousFingerParameter, Frame, GaitType, GetModeResponse, GetRobotInfoResponse,
@@ -477,6 +485,31 @@ impl BoosterClient {
             .await
     }
 
+    /// Send a fire-and-forget velocity command (C++ `MoveCommand`).
+    ///
+    /// Unlike [`Self::move_robot`] this does not wait for a response, so it is
+    /// suited to high-rate control loops. Fails with status 100
+    /// ([`crate::types::RpcError::RemoteTimeout`]) if the locomotion service
+    /// has not been discovered yet.
+    pub async fn move_command(&self, vx: f32, vy: f32, vyaw: f32) -> Result<()> {
+        let param = json!({ "vx": vx, "vy": vy, "vyaw": vyaw }).to_string();
+        self.rpc.fire_and_forget(LocoApiId::Move, param).await
+    }
+
+    /// Wait until the locomotion service is discovered (C++ `WaitForService`).
+    ///
+    /// With `require_response_path`, the response channel must be matched too.
+    pub async fn wait_for_service(&self, timeout: Duration, require_response_path: bool) -> bool {
+        self.rpc
+            .wait_for_service(timeout, require_response_path)
+            .await
+    }
+
+    /// Access the underlying RPC client.
+    pub fn rpc(&self) -> &RpcClient {
+        &self.rpc
+    }
+
     /// Query trained-trajectory execution status.
     pub async fn get_trained_traj_status(&self) -> Result<GetTrainedTrajStatusResponse> {
         self.rpc
@@ -624,6 +657,85 @@ impl BoosterClient {
     /// Subscribe to video stream messages.
     pub fn subscribe_video_stream(&self) -> Result<DdsSubscription<BinaryData>> {
         self.rpc.node().subscribe(&video_stream_topic(), 4)
+    }
+
+    /// Subscribe to low-level motor and IMU state (`rt/low_state`).
+    pub fn subscribe_low_state(&self) -> Result<DdsSubscription<LowState>> {
+        self.rpc.node().subscribe(&low_state_topic(), 4)
+    }
+
+    /// Subscribe to planar odometry (`rt/odometer_state`).
+    pub fn subscribe_odometer(&self) -> Result<DdsSubscription<Odometer>> {
+        self.rpc.node().subscribe(&odometer_state_topic(), 4)
+    }
+
+    /// Subscribe to fall and recovery state (`rt/fall_down`).
+    pub fn subscribe_fall_down(&self) -> Result<DdsSubscription<FallDownState>> {
+        self.rpc.node().subscribe(&fall_down_topic(), 8)
+    }
+
+    /// Subscribe to mode / body-control / action state (`rt/robot_states`).
+    pub fn subscribe_robot_states(&self) -> Result<DdsSubscription<RobotStatesMsg>> {
+        self.rpc.node().subscribe(&robot_states_topic(), 8)
+    }
+
+    /// Subscribe to prone-body and visual-kick status.
+    pub fn subscribe_prone_body_control_status(
+        &self,
+    ) -> Result<DdsSubscription<ProneBodyControlStatus>> {
+        self.rpc
+            .node()
+            .subscribe(&prone_body_control_status_topic(), 8)
+    }
+
+    /// Subscribe to the id of the recorded trajectory being replayed.
+    pub fn subscribe_robot_replay_traj_id(&self) -> Result<DdsSubscription<RobotReplayTrajID>> {
+        self.rpc.node().subscribe(&robot_replay_traj_id_topic(), 8)
+    }
+
+    /// Subscribe to trained-trajectory execution status.
+    pub fn subscribe_trained_traj_status(&self) -> Result<DdsSubscription<TrainedTrajStatus>> {
+        self.rpc.node().subscribe(&trained_traj_status_topic(), 8)
+    }
+
+    /// Subscribe to soccer behavior state (K1 / T1).
+    pub fn subscribe_robocup_behavior_status(
+        &self,
+    ) -> Result<DdsSubscription<RobocupBehaviorStatus>> {
+        self.rpc
+            .node()
+            .subscribe(&robocup_behavior_status_topic(), 8)
+    }
+
+    /// Subscribe to dexterous-hand actuator data (requires a compatible hand).
+    pub fn subscribe_hand_data(&self) -> Result<DdsSubscription<HandReplyData>> {
+        self.rpc.node().subscribe(&booster_hand_data_topic(), 8)
+    }
+
+    /// Subscribe to hand touch-sensor data (requires a touch hand).
+    pub fn subscribe_hand_touch_data(&self) -> Result<DdsSubscription<HandTouchData>> {
+        self.rpc.node().subscribe(&hand_touch_data_topic(), 8)
+    }
+
+    /// Subscribe to the robot transform tree (`rt/tf`).
+    pub fn subscribe_tf(&self) -> Result<DdsSubscription<TFMessage>> {
+        self.rpc.node().subscribe(&tf_topic(), 8)
+    }
+
+    /// Create a publisher for low-level joint commands (`rt/joint_ctrl`).
+    ///
+    /// The command's joint layout must match the robot model (see
+    /// [`crate::types::JOINT_CNT`] and friends). Low-level commands are only
+    /// honoured in custom mode / upper-body custom control; sending a wrong
+    /// layout can address the wrong actuators.
+    pub fn low_cmd_publisher(&self) -> Result<DdsPublisher<LowCmd>> {
+        self.rpc.node().publisher(&joint_ctrl_topic())
+    }
+
+    /// Create a publisher for visual/soccer kick reference commands
+    /// (`rt/kick_ball`, K1 / T1).
+    pub fn kick_publisher(&self) -> Result<DdsPublisher<Kick>> {
+        self.rpc.node().publisher(&kick_ball_topic())
     }
 }
 
