@@ -1,23 +1,18 @@
 mod client;
+mod errors;
+mod macros;
+mod options;
 mod runtime;
 mod subscription;
 
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use booster_sdk::{client::ai::BOOSTER_ROBOT_USER_ID, types::BoosterError};
-use pyo3::{
-    exceptions::{PyException, PyValueError},
-    prelude::*,
-    types::PyModule,
-};
+use booster_sdk::client::ai::BOOSTER_ROBOT_USER_ID;
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyModule};
 use tracing_subscriber::{EnvFilter, fmt};
 
-pyo3::create_exception!(booster_sdk_bindings, BoosterSdkError, PyException);
-
-pub(crate) fn to_py_err(err: BoosterError) -> PyErr {
-    BoosterSdkError::new_err(err.to_string())
-}
+pub(crate) use errors::to_py_err;
 
 pub(crate) fn startup_wait_from_seconds(
     startup_wait_sec: Option<f64>,
@@ -40,6 +35,15 @@ pub(crate) fn json_value_to_py(py: Python<'_>, value: &serde_json::Value) -> PyR
     PyModule::import(py, "json")?
         .call_method1("loads", (value.to_string(),))
         .map(Bound::unbind)
+}
+
+/// Convert a JSON-compatible Python object to a `serde_json::Value`
+/// (through `json.dumps`).
+pub(crate) fn py_to_json_value(value: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
+    let text: String = PyModule::import(value.py(), "json")?
+        .call_method1("dumps", (value,))?
+        .extract()?;
+    serde_json::from_str(&text).map_err(|err| PyValueError::new_err(err.to_string()))
 }
 
 fn rpc_debug_enabled() -> bool {
@@ -77,7 +81,7 @@ fn init_tracing_for_python() {
 fn booster_sdk_bindings(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     init_tracing_for_python();
 
-    m.add("BoosterSdkError", py.get_type::<BoosterSdkError>())?;
+    errors::register(py, m)?;
     m.add("BOOSTER_ROBOT_USER_ID", BOOSTER_ROBOT_USER_ID)?;
 
     client::register_classes(m)?;

@@ -1,717 +1,401 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
-use booster_sdk::client::audio::{
-    AudioCaptureStreamInfo, AudioCaptureStreamOptions, AudioCaptureStreamState, AudioClient,
-    AudioDeviceBackendAffinity, AudioDeviceDirection, AudioDeviceInfo, AudioDeviceQueryType,
-    AudioDeviceTransport, AudioSourceType, BluetoothAudioProfile, BluetoothConnectOptions,
-    BluetoothConnectResult, BluetoothDeviceInfo, BluetoothDeviceState, BluetoothMajorClass,
-    BluetoothScanOptions, InitCaptureStreamResponse, InitPlayerResponse, InitRecorderResponse,
-    PcmFormat, PlayerInfo, PlayerInitOptions, PlayerPriority, PlayerState, RecorderInfo,
-    RecorderInitOptions, RecorderState,
+use booster_sdk::{
+    client::audio::{
+        AUDIO_ERR_NOT_SUPPORTED, AUDIO_ERROR_TOPIC, AUDIO_EVENT_TOPIC, AUDIO_PROGRESS_TOPIC,
+        AudioCaptureFrame, AudioCaptureFrameTopic, AudioCaptureStream, AudioCaptureStreamInfo,
+        AudioCaptureStreamOptions, AudioCaptureStreamState, AudioClient,
+        AudioDeviceBackendAffinity, AudioDeviceDirection, AudioDeviceInfo, AudioDeviceQueryType,
+        AudioDeviceTransport, AudioError, AudioErrorCategory, AudioErrorCode, AudioErrorDetail,
+        AudioErrorTopic, AudioEventCode, AudioEventTopic, AudioLocalizer, AudioPlayer,
+        AudioProgressTopic, AudioRecorder, AudioSourceType, AudioTopicHeader,
+        BluetoothAudioProfile, BluetoothConnectOptions, BluetoothConnectResult,
+        BluetoothDeviceInfo, BluetoothDeviceState, BluetoothMajorClass, BluetoothScanOptions,
+        BluetoothScanState, InitCaptureStreamResponse, InitPlayerResponse, InitRecorderResponse,
+        PcmFormat, PlayerInfo, PlayerInitOptions, PlayerPriority, PlayerState, RecorderInfo,
+        RecorderInitOptions, RecorderState, SessionType, capture_frame_topic_name,
+    },
+    dds::BluetoothEvent,
 };
-use pyo3::{Bound, prelude::*, types::PyModule};
+use pyo3::{
+    Bound,
+    prelude::*,
+    types::{PyBytes, PyModule},
+};
 
-use crate::{runtime::wait_for_future, startup_wait_from_seconds, to_py_err};
+use crate::{
+    macros::{py_int_enum, py_param_class, py_readonly_class},
+    options::rpc_options,
+    runtime::wait_for_future,
+    subscription::PySubscription,
+    to_py_err,
+};
 
-macro_rules! py_int_enum {
-    ($py_name:ident, $public_name:literal, $inner:ty, { $($attr:ident => $variant:ident),+ $(,)? }) => {
-        #[pyclass(module = "booster_sdk_bindings", name = $public_name, eq)]
-        #[derive(Clone, Copy, PartialEq, Eq)]
-        pub struct $py_name($inner);
-
-        #[pymethods]
-        impl $py_name {
-            $(
-                #[classattr]
-                const $attr: Self = Self(<$inner>::$variant);
-            )+
-
-            fn __int__(&self) -> i32 {
-                i32::from(self.0)
-            }
-        }
-
-        impl From<$py_name> for $inner {
-            fn from(value: $py_name) -> Self {
-                value.0
-            }
-        }
-
-        impl From<$inner> for $py_name {
-            fn from(value: $inner) -> Self {
-                Self(value)
-            }
-        }
-    };
+/// Block on an SDK future and convert its error.
+fn run<T, F>(py: Python<'_>, future: F) -> PyResult<T>
+where
+    F: Future<Output = booster_sdk::types::Result<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    wait_for_future(py, future).map_err(to_py_err)
 }
 
-py_int_enum!(
-    PyAudioDeviceQueryType,
-    "AudioDeviceQueryType",
-    AudioDeviceQueryType,
-    { INPUTS => Inputs, OUTPUTS => Outputs }
-);
-py_int_enum!(
-    PyAudioDeviceDirection,
-    "AudioDeviceDirection",
-    AudioDeviceDirection,
-    { INPUT => Input, OUTPUT => Output }
-);
-py_int_enum!(
-    PyAudioDeviceTransport,
-    "AudioDeviceTransport",
-    AudioDeviceTransport,
-    {
-        BUILTIN => Builtin,
-        USB => Usb,
-        BLUETOOTH => Bluetooth,
-        VIRTUAL => Virtual,
-        UNKNOWN => Unknown
-    }
-);
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+py_int_enum!(PyAudioSourceType, "AudioSourceType", AudioSourceType, i32, {
+    PCM_FILE => PcmFile,
+    WAV_FILE => WavFile,
+    PCM_STREAM => PcmStream,
+    MP3_FILE => Mp3File,
+});
+py_int_enum!(PyPlayerPriority, "PlayerPriority", PlayerPriority, i32, {
+    LOW => Low,
+    MEDIUM => Medium,
+    HIGH => High,
+});
+py_int_enum!(PyPlayerState, "PlayerState", PlayerState, i32, {
+    IDLE => Idle,
+    READY => Ready,
+    PLAYING => Playing,
+    PAUSED => Paused,
+    STOPPED => Stopped,
+    COMPLETED => Completed,
+    ERROR => Error,
+});
+py_int_enum!(PyRecorderState, "RecorderState", RecorderState, i32, {
+    IDLE => Idle,
+    READY => Ready,
+    RECORDING => Recording,
+    PAUSED => Paused,
+    STOPPED => Stopped,
+    ERROR => Error,
+});
+py_int_enum!(PyAudioCaptureStreamState, "AudioCaptureStreamState", AudioCaptureStreamState, i32, {
+    IDLE => Idle,
+    READY => Ready,
+    STREAMING => Streaming,
+    PAUSED => Paused,
+    STOPPED => Stopped,
+    ERROR => Error,
+});
+py_int_enum!(PyAudioDeviceQueryType, "AudioDeviceQueryType", AudioDeviceQueryType, i32, {
+    INPUTS => Inputs,
+    OUTPUTS => Outputs,
+});
+py_int_enum!(PyAudioDeviceDirection, "AudioDeviceDirection", AudioDeviceDirection, i32, {
+    INPUT => Input,
+    OUTPUT => Output,
+});
+py_int_enum!(PyAudioDeviceTransport, "AudioDeviceTransport", AudioDeviceTransport, i32, {
+    BUILTIN => Builtin,
+    USB => Usb,
+    BLUETOOTH => Bluetooth,
+    VIRTUAL => Virtual,
+    UNKNOWN => Unknown,
+});
 py_int_enum!(
     PyAudioDeviceBackendAffinity,
     "AudioDeviceBackendAffinity",
     AudioDeviceBackendAffinity,
+    i32,
     {
         PULSE => Pulse,
         BOOSTER_AEC_ARRAY => BoosterAecArray,
-        ALSA_DIAGNOSTIC => AlsaDiagnostic
+        ALSA_DIAGNOSTIC => AlsaDiagnostic,
     }
 );
-py_int_enum!(
-    PyBluetoothDeviceState,
-    "BluetoothDeviceState",
-    BluetoothDeviceState,
+py_int_enum!(PyBluetoothScanState, "BluetoothScanState", BluetoothScanState, i32, {
+    IDLE => Idle,
+    SCANNING => Scanning,
+});
+py_int_enum!(PyBluetoothDeviceState, "BluetoothDeviceState", BluetoothDeviceState, i32, {
+    UNKNOWN => Unknown,
+    PAIRED => Paired,
+    CONNECTING => Connecting,
+    CONNECTED => Connected,
+    DISCONNECTING => Disconnecting,
+    FAILED => Failed,
+});
+py_int_enum!(PyBluetoothMajorClass, "BluetoothMajorClass", BluetoothMajorClass, i32, {
+    AUDIO => Audio,
+    PERIPHERAL => Peripheral,
+    PHONE => Phone,
+    COMPUTER => Computer,
+    OTHER => Other,
+});
+py_int_enum!(PyBluetoothAudioProfile, "BluetoothAudioProfile", BluetoothAudioProfile, i32, {
+    NONE => None,
+    A2DP_SINK => A2dpSink,
+    A2DP_SOURCE => A2dpSource,
+    HFP_HEADSET => HfpHeadset,
+    HFP_AG => HfpAg,
+});
+py_int_enum!(PySessionType, "SessionType", SessionType, i32, {
+    PLAYER => Player,
+    RECORDER => Recorder,
+    LOCALIZER => Localizer,
+    CAPTURE_STREAM => CaptureStream,
+});
+py_int_enum!(PyAudioErrorCode, "AudioErrorCode", AudioErrorCode, i32, {
+    SERVICE_DEGRADED => ServiceDegraded,
+    INVALID_STATE => InvalidState,
+    DEVICE_BUSY => DeviceBusy,
+    NOT_SUPPORTED => NotSupported,
+    LOCALIZATION_UNAVAILABLE => LocalizationUnavailable,
+    ALSA_DEVICE_NOT_FOUND => AlsaDeviceNotFound,
+    ALGO_INIT_FAILED => AlgoInitFailed,
+    ALGO_PROCESS_FAILED => AlgoProcessFailed,
+    SYSTEM_VOLUME_CTRL_FAILED => SystemVolumeCtrlFailed,
+    SYSTEM_MUTE_CTRL_FAILED => SystemMuteCtrlFailed,
+    MEDIA_DECODE_FAILED => MediaDecodeFailed,
+    MEDIA_ENCODE_FAILED => MediaEncodeFailed,
+    MEDIA_FORMAT_UNSUPPORTED => MediaFormatUnsupported,
+});
+py_int_enum!(PyAudioEventCode, "AudioEventCode", AudioEventCode, i32, {
+    PLAYER_INIT_SUCCEEDED => PlayerInitSucceeded,
+    PLAYER_START_SUCCEEDED => PlayerStartSucceeded,
+    PLAYER_PAUSE_SUCCEEDED => PlayerPauseSucceeded,
+    PLAYER_STOP_SUCCEEDED => PlayerStopSucceeded,
+    PLAYER_RESET_SUCCEEDED => PlayerResetSucceeded,
+    PLAYER_DESTROY_SUCCEEDED => PlayerDestroySucceeded,
+    RECORDER_INIT_SUCCEEDED => RecorderInitSucceeded,
+    RECORDER_START_SUCCEEDED => RecorderStartSucceeded,
+    RECORDER_PAUSE_SUCCEEDED => RecorderPauseSucceeded,
+    RECORDER_STOP_SUCCEEDED => RecorderStopSucceeded,
+    RECORDER_DESTROY_SUCCEEDED => RecorderDestroySucceeded,
+    PLAYER_TERMINAL_STATE_CHANGED => PlayerTerminalStateChanged,
+    SYSTEM_VOLUME_SET_SUCCEEDED => SystemVolumeSetSucceeded,
+    SYSTEM_MUTE_SET_SUCCEEDED => SystemMuteSetSucceeded,
+    CAPTURE_STREAM_INIT_SUCCEEDED => CaptureStreamInitSucceeded,
+    CAPTURE_STREAM_START_SUCCEEDED => CaptureStreamStartSucceeded,
+    CAPTURE_STREAM_PAUSE_SUCCEEDED => CaptureStreamPauseSucceeded,
+    CAPTURE_STREAM_STOP_SUCCEEDED => CaptureStreamStopSucceeded,
+    CAPTURE_STREAM_DESTROY_SUCCEEDED => CaptureStreamDestroySucceeded,
+});
+py_int_enum!(PyAudioErrorCategory, "AudioErrorCategory", AudioErrorCategory, i32, {
+    RPC_ERROR => RpcError,
+    PLAYBACK_ERROR => PlaybackError,
+    RECORD_ERROR => RecordError,
+    CAPTURE_STREAM_RUNTIME_ERROR => CaptureStreamRuntimeError,
+    LOCALIZATION_ERROR => LocalizationError,
+    SYSTEM_VOLUME_ERROR => SystemVolumeError,
+    SYSTEM_MUTE_ERROR => SystemMuteError,
+    INTERNAL_ERROR => InternalError,
+});
+py_int_enum!(PyAudioErrorDetail, "AudioErrorDetail", AudioErrorDetail, i32, {
+    NONE => None,
+    INIT_PLAYER => InitPlayer,
+    START_PLAYER => StartPlayer,
+    PAUSE_PLAYER => PausePlayer,
+    STOP_PLAYER => StopPlayer,
+    RESET_PLAYER => ResetPlayer,
+    DESTROY_PLAYER => DestroyPlayer,
+    GET_PLAYER_INFO => GetPlayerInfo,
+    SEND_PCM_DATA => SendPcmData,
+    INIT_RECORDER => InitRecorder,
+    START_RECORDER => StartRecorder,
+    PAUSE_RECORDER => PauseRecorder,
+    STOP_RECORDER => StopRecorder,
+    DESTROY_RECORDER => DestroyRecorder,
+    GET_RECORDER_INFO => GetRecorderInfo,
+    GET_DOA_ANGLE => GetDoaAngle,
+    SET_SYSTEM_VOLUME => SetSystemVolume,
+    GET_SYSTEM_VOLUME => GetSystemVolume,
+    SET_SYSTEM_MUTE => SetSystemMute,
+    GET_SYSTEM_MUTE => GetSystemMute,
+    INIT_CAPTURE_STREAM => InitCaptureStream,
+    START_CAPTURE_STREAM => StartCaptureStream,
+    PAUSE_CAPTURE_STREAM => PauseCaptureStream,
+    STOP_CAPTURE_STREAM => StopCaptureStream,
+    DESTROY_CAPTURE_STREAM => DestroyCaptureStream,
+    GET_CAPTURE_STREAM_INFO => GetCaptureStreamInfo,
+});
+
+// ---------------------------------------------------------------------------
+// Options (mutable)
+// ---------------------------------------------------------------------------
+
+py_param_class!(PyPcmFormat, "PcmFormat", PcmFormat, {
+    sample_rate_hz: i32 = 16000,
+    channels: i32 = 1,
+    bits_per_sample: i32 = 16,
+});
+
+py_param_class!(
+    PyPlayerInitOptions,
+    "PlayerInitOptions",
+    PlayerInitOptions,
     {
-        UNKNOWN => Unknown,
-        PAIRED => Paired,
-        CONNECTING => Connecting,
-        CONNECTED => Connected,
-        DISCONNECTING => Disconnecting,
-        FAILED => Failed
-    }
-);
-py_int_enum!(
-    PyBluetoothMajorClass,
-    "BluetoothMajorClass",
-    BluetoothMajorClass,
+        source_type: PyAudioSourceType = PyAudioSourceType(AudioSourceType::PcmFile),
+        source_uri: String = String::new(),
+        sample_rate_hz: i32 = 16000,
+        channels: i32 = 1,
+        bits_per_sample: i32 = 16,
+        priority: PyPlayerPriority = PyPlayerPriority(PlayerPriority::Medium),
+    },
     {
-        AUDIO => Audio,
-        PERIPHERAL => Peripheral,
-        PHONE => Phone,
-        COMPUTER => Computer,
-        OTHER => Other
+        /// Options for a PCM stream player fed through `send_pcm_data`.
+        #[staticmethod]
+        fn pcm_stream() -> Self {
+            Self::from_rust(PlayerInitOptions::pcm_stream())
+        }
     }
 );
-py_int_enum!(
-    PyBluetoothAudioProfile,
-    "BluetoothAudioProfile",
-    BluetoothAudioProfile,
+
+py_param_class!(PyRecorderInitOptions, "RecorderInitOptions", RecorderInitOptions, {
+    output_path: String = String::new(),
+    sample_rate_hz: i32 = 16000,
+    channels: i32 = 1,
+    bits_per_sample: i32 = 16,
+});
+
+py_param_class!(
+    PyAudioCaptureStreamOptions,
+    "AudioCaptureStreamOptions",
+    AudioCaptureStreamOptions,
     {
-        NONE => None,
-        A2DP_SINK => A2dpSink,
-        A2DP_SOURCE => A2dpSource,
-        HFP_HEADSET => HfpHeadset,
-        HFP_AG => HfpAg
+        enable_raw_pcm: bool = true,
+        enable_naec_pcm: bool = false,
+        requested_raw_format: PyPcmFormat =
+            PyPcmFormat::from_rust(AudioCaptureStreamOptions::default().requested_raw_format),
     }
 );
 
-#[pyclass(module = "booster_sdk_bindings", name = "AudioSourceType", eq)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PyAudioSourceType(AudioSourceType);
+py_param_class!(PyBluetoothScanOptions, "BluetoothScanOptions", BluetoothScanOptions, {
+    timeout_ms: i32 = 30000,
+    audio_only: bool = true,
+});
 
-#[pymethods]
-impl PyAudioSourceType {
-    #[classattr]
-    const PCM_FILE: Self = Self(AudioSourceType::PcmFile);
-    #[classattr]
-    const WAV_FILE: Self = Self(AudioSourceType::WavFile);
-    #[classattr]
-    const PCM_STREAM: Self = Self(AudioSourceType::PcmStream);
-    #[classattr]
-    const MP3_FILE: Self = Self(AudioSourceType::Mp3File);
-
-    fn __int__(&self) -> i32 {
-        i32::from(self.0)
+py_param_class!(
+    PyBluetoothConnectOptions,
+    "BluetoothConnectOptions",
+    BluetoothConnectOptions,
+    {
+        address: String = String::new(),
+        auto_pair: bool = true,
+        make_default: bool = true,
+        preferred_profile: PyBluetoothAudioProfile =
+            PyBluetoothAudioProfile(BluetoothAudioProfile::None),
+        timeout_ms: i32 = 15000,
     }
-}
+);
 
-impl From<PyAudioSourceType> for AudioSourceType {
-    fn from(value: PyAudioSourceType) -> Self {
-        value.0
+py_param_class!(
+    PyAudioError,
+    "AudioError",
+    AudioError,
+    {
+        ret_code: i32 = 0,
+        ret_msg: String = String::new(),
+        error_category: i32 = 0,
+        error_detail: i32 = 0,
+    },
+    {
+        fn category_enum(&self) -> Option<PyAudioErrorCategory> {
+            self.to_rust().category_enum().map(Into::into)
+        }
+
+        fn detail_enum(&self) -> Option<PyAudioErrorDetail> {
+            self.to_rust().detail_enum().map(Into::into)
+        }
     }
-}
+);
 
-#[pyclass(module = "booster_sdk_bindings", name = "PlayerPriority", eq)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PyPlayerPriority(PlayerPriority);
+// ---------------------------------------------------------------------------
+// Responses (read-only)
+// ---------------------------------------------------------------------------
 
-#[pymethods]
-impl PyPlayerPriority {
-    #[classattr]
-    const LOW: Self = Self(PlayerPriority::Low);
-    #[classattr]
-    const MEDIUM: Self = Self(PlayerPriority::Medium);
-    #[classattr]
-    const HIGH: Self = Self(PlayerPriority::High);
+py_readonly_class!(PyInitPlayerResponse, "InitPlayerResponse", InitPlayerResponse, {
+    ret_code: i32,
+    ret_msg: String,
+    session_id: i64,
+});
 
-    fn __int__(&self) -> i32 {
-        i32::from(self.0)
+py_readonly_class!(PyInitRecorderResponse, "InitRecorderResponse", InitRecorderResponse, {
+    ret_code: i32,
+    ret_msg: String,
+    session_id: i64,
+});
+
+py_readonly_class!(
+    PyInitCaptureStreamResponse,
+    "InitCaptureStreamResponse",
+    InitCaptureStreamResponse,
+    {
+        ret_code: i32,
+        ret_msg: String,
+        session_id: i64,
+        data_topic_name: String,
     }
-}
+);
 
-impl From<PyPlayerPriority> for PlayerPriority {
-    fn from(value: PyPlayerPriority) -> Self {
-        value.0
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "PlayerState", eq)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PyPlayerState(PlayerState);
-
-#[pymethods]
-impl PyPlayerState {
-    #[classattr]
-    const IDLE: Self = Self(PlayerState::Idle);
-    #[classattr]
-    const READY: Self = Self(PlayerState::Ready);
-    #[classattr]
-    const PLAYING: Self = Self(PlayerState::Playing);
-    #[classattr]
-    const PAUSED: Self = Self(PlayerState::Paused);
-    #[classattr]
-    const STOPPED: Self = Self(PlayerState::Stopped);
-    #[classattr]
-    const COMPLETED: Self = Self(PlayerState::Completed);
-    #[classattr]
-    const ERROR: Self = Self(PlayerState::Error);
-
-    fn __int__(&self) -> i32 {
-        i32::from(self.0)
-    }
-}
-
-impl From<PlayerState> for PyPlayerState {
-    fn from(value: PlayerState) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "RecorderState", eq)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PyRecorderState(RecorderState);
-
-#[pymethods]
-impl PyRecorderState {
-    #[classattr]
-    const IDLE: Self = Self(RecorderState::Idle);
-    #[classattr]
-    const READY: Self = Self(RecorderState::Ready);
-    #[classattr]
-    const RECORDING: Self = Self(RecorderState::Recording);
-    #[classattr]
-    const PAUSED: Self = Self(RecorderState::Paused);
-    #[classattr]
-    const STOPPED: Self = Self(RecorderState::Stopped);
-    #[classattr]
-    const ERROR: Self = Self(RecorderState::Error);
-
-    fn __int__(&self) -> i32 {
-        i32::from(self.0)
-    }
-}
-
-impl From<RecorderState> for PyRecorderState {
-    fn from(value: RecorderState) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "AudioCaptureStreamState", eq)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PyAudioCaptureStreamState(AudioCaptureStreamState);
-
-#[pymethods]
-impl PyAudioCaptureStreamState {
-    #[classattr]
-    const IDLE: Self = Self(AudioCaptureStreamState::Idle);
-    #[classattr]
-    const READY: Self = Self(AudioCaptureStreamState::Ready);
-    #[classattr]
-    const STREAMING: Self = Self(AudioCaptureStreamState::Streaming);
-    #[classattr]
-    const PAUSED: Self = Self(AudioCaptureStreamState::Paused);
-    #[classattr]
-    const STOPPED: Self = Self(AudioCaptureStreamState::Stopped);
-    #[classattr]
-    const ERROR: Self = Self(AudioCaptureStreamState::Error);
-
-    fn __int__(&self) -> i32 {
-        i32::from(self.0)
-    }
-}
-
-impl From<AudioCaptureStreamState> for PyAudioCaptureStreamState {
-    fn from(value: AudioCaptureStreamState) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "PcmFormat")]
-#[derive(Clone, Copy)]
-pub struct PyPcmFormat(PcmFormat);
-
-#[pymethods]
-impl PyPcmFormat {
-    #[new]
-    #[pyo3(signature = (sample_rate_hz=16000, channels=1, bits_per_sample=16))]
-    fn new(sample_rate_hz: i32, channels: i32, bits_per_sample: i32) -> Self {
-        Self(PcmFormat {
-            sample_rate_hz,
-            channels,
-            bits_per_sample,
-        })
-    }
-
-    #[getter]
-    fn sample_rate_hz(&self) -> i32 {
-        self.0.sample_rate_hz
-    }
-
-    #[getter]
-    fn channels(&self) -> i32 {
-        self.0.channels
-    }
-
-    #[getter]
-    fn bits_per_sample(&self) -> i32 {
-        self.0.bits_per_sample
-    }
-}
-
-impl From<PyPcmFormat> for PcmFormat {
-    fn from(value: PyPcmFormat) -> Self {
-        value.0
-    }
-}
-
-impl From<PcmFormat> for PyPcmFormat {
-    fn from(value: PcmFormat) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "PlayerInitOptions")]
-#[derive(Clone)]
-pub struct PyPlayerInitOptions(PlayerInitOptions);
-
-#[pymethods]
-impl PyPlayerInitOptions {
-    #[new]
-    #[pyo3(signature = (source_type, source_uri, sample_rate_hz=16000, channels=1, bits_per_sample=16, priority=None))]
-    fn new(
-        source_type: PyAudioSourceType,
-        source_uri: String,
-        sample_rate_hz: i32,
-        channels: i32,
-        bits_per_sample: i32,
-        priority: Option<PyPlayerPriority>,
-    ) -> Self {
-        Self(PlayerInitOptions {
-            source_type: source_type.into(),
-            source_uri,
-            sample_rate_hz,
-            channels,
-            bits_per_sample,
-            priority: priority.map(Into::into).unwrap_or(PlayerPriority::Medium),
-        })
-    }
-
-    #[staticmethod]
-    fn pcm_stream() -> Self {
-        Self(PlayerInitOptions::pcm_stream())
-    }
-}
-
-impl From<PyPlayerInitOptions> for PlayerInitOptions {
-    fn from(value: PyPlayerInitOptions) -> Self {
-        value.0
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "RecorderInitOptions")]
-#[derive(Clone)]
-pub struct PyRecorderInitOptions(RecorderInitOptions);
-
-#[pymethods]
-impl PyRecorderInitOptions {
-    #[new]
-    #[pyo3(signature = (output_path, sample_rate_hz=16000, channels=1, bits_per_sample=16))]
-    fn new(output_path: String, sample_rate_hz: i32, channels: i32, bits_per_sample: i32) -> Self {
-        Self(RecorderInitOptions {
-            output_path,
-            sample_rate_hz,
-            channels,
-            bits_per_sample,
-        })
-    }
-}
-
-impl From<PyRecorderInitOptions> for RecorderInitOptions {
-    fn from(value: PyRecorderInitOptions) -> Self {
-        value.0
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "AudioCaptureStreamOptions")]
-#[derive(Clone)]
-pub struct PyAudioCaptureStreamOptions(AudioCaptureStreamOptions);
-
-#[pymethods]
-impl PyAudioCaptureStreamOptions {
-    #[new]
-    #[pyo3(signature = (enable_raw_pcm=true, enable_naec_pcm=false, requested_raw_format=None))]
-    fn new(
-        enable_raw_pcm: bool,
-        enable_naec_pcm: bool,
-        requested_raw_format: Option<PyPcmFormat>,
-    ) -> Self {
-        Self(AudioCaptureStreamOptions {
-            enable_raw_pcm,
-            enable_naec_pcm,
-            requested_raw_format: requested_raw_format.map_or_else(
-                || AudioCaptureStreamOptions::default().requested_raw_format,
-                Into::into,
-            ),
-        })
-    }
-}
-
-impl From<PyAudioCaptureStreamOptions> for AudioCaptureStreamOptions {
-    fn from(value: PyAudioCaptureStreamOptions) -> Self {
-        value.0
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "InitPlayerResponse")]
-#[derive(Clone)]
-pub struct PyInitPlayerResponse(InitPlayerResponse);
-
-#[pymethods]
-impl PyInitPlayerResponse {
-    #[getter]
-    fn ret_code(&self) -> i32 {
-        self.0.ret_code
-    }
-
-    #[getter]
-    fn ret_msg(&self) -> String {
-        self.0.ret_msg.clone()
-    }
-
-    #[getter]
-    fn session_id(&self) -> i64 {
-        self.0.session_id
-    }
-}
-
-impl From<InitPlayerResponse> for PyInitPlayerResponse {
-    fn from(value: InitPlayerResponse) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "InitRecorderResponse")]
-#[derive(Clone)]
-pub struct PyInitRecorderResponse(InitRecorderResponse);
-
-#[pymethods]
-impl PyInitRecorderResponse {
-    #[getter]
-    fn ret_code(&self) -> i32 {
-        self.0.ret_code
-    }
-
-    #[getter]
-    fn ret_msg(&self) -> String {
-        self.0.ret_msg.clone()
-    }
-
-    #[getter]
-    fn session_id(&self) -> i64 {
-        self.0.session_id
-    }
-}
-
-impl From<InitRecorderResponse> for PyInitRecorderResponse {
-    fn from(value: InitRecorderResponse) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "InitCaptureStreamResponse")]
-#[derive(Clone)]
-pub struct PyInitCaptureStreamResponse(InitCaptureStreamResponse);
-
-#[pymethods]
-impl PyInitCaptureStreamResponse {
-    #[getter]
-    fn ret_code(&self) -> i32 {
-        self.0.ret_code
-    }
-
-    #[getter]
-    fn ret_msg(&self) -> String {
-        self.0.ret_msg.clone()
-    }
-
-    #[getter]
-    fn session_id(&self) -> i64 {
-        self.0.session_id
-    }
-
-    #[getter]
-    fn data_topic_name(&self) -> String {
-        self.0.data_topic_name.clone()
-    }
-}
-
-impl From<InitCaptureStreamResponse> for PyInitCaptureStreamResponse {
-    fn from(value: InitCaptureStreamResponse) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "PlayerInfo")]
-#[derive(Clone)]
-pub struct PyPlayerInfo(PlayerInfo);
-
-#[pymethods]
-impl PyPlayerInfo {
-    #[getter]
-    fn state(&self) -> i32 {
-        self.0.state
-    }
-
+py_readonly_class!(PyPlayerInfo, "PlayerInfo", PlayerInfo, {
+    state: i32,
+    played_bytes: i64,
+    total_bytes: i64,
+    volume: f32,
+}, {
     fn state_enum(&self) -> Option<PyPlayerState> {
         self.0.state_enum().map(Into::into)
     }
+});
 
-    #[getter]
-    fn played_bytes(&self) -> i64 {
-        self.0.played_bytes
-    }
-
-    #[getter]
-    fn total_bytes(&self) -> i64 {
-        self.0.total_bytes
-    }
-
-    #[getter]
-    fn volume(&self) -> f32 {
-        self.0.volume
-    }
-}
-
-impl From<PlayerInfo> for PyPlayerInfo {
-    fn from(value: PlayerInfo) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "RecorderInfo")]
-#[derive(Clone)]
-pub struct PyRecorderInfo(RecorderInfo);
-
-#[pymethods]
-impl PyRecorderInfo {
-    #[getter]
-    fn state(&self) -> i32 {
-        self.0.state
-    }
-
+py_readonly_class!(PyRecorderInfo, "RecorderInfo", RecorderInfo, {
+    state: i32,
+    captured_bytes: i64,
+}, {
     fn state_enum(&self) -> Option<PyRecorderState> {
         self.0.state_enum().map(Into::into)
     }
+});
 
-    #[getter]
-    fn captured_bytes(&self) -> i64 {
-        self.0.captured_bytes
-    }
-}
-
-impl From<RecorderInfo> for PyRecorderInfo {
-    fn from(value: RecorderInfo) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "AudioCaptureStreamInfo")]
-#[derive(Clone)]
-pub struct PyAudioCaptureStreamInfo(AudioCaptureStreamInfo);
-
-#[pymethods]
-impl PyAudioCaptureStreamInfo {
-    #[getter]
-    fn state(&self) -> i32 {
-        self.0.state
-    }
-
+py_readonly_class!(PyAudioCaptureStreamInfo, "AudioCaptureStreamInfo", AudioCaptureStreamInfo, {
+    state: i32,
+    raw_enabled: bool,
+    naec_enabled: bool,
+    actual_raw_format: PyPcmFormat,
+    actual_naec_format: PyPcmFormat,
+    published_frames: i64,
+    dropped_frames: i64,
+}, {
     fn state_enum(&self) -> Option<PyAudioCaptureStreamState> {
         self.0.state_enum().map(Into::into)
     }
+});
 
-    #[getter]
-    fn raw_enabled(&self) -> bool {
-        self.0.raw_enabled
-    }
+py_readonly_class!(PyAudioDeviceInfo, "AudioDeviceInfo", AudioDeviceInfo, {
+    device_id: String,
+    display_name: String,
+    direction: PyAudioDeviceDirection,
+    transport: PyAudioDeviceTransport,
+    backend_affinity: PyAudioDeviceBackendAffinity,
+    is_available: bool,
+    is_system_default: bool,
+    supports_input: bool,
+    supports_output: bool,
+    provider_name: String,
+    native_id: String,
+    metadata_json: String,
+});
 
-    #[getter]
-    fn naec_enabled(&self) -> bool {
-        self.0.naec_enabled
-    }
-
-    #[getter]
-    fn actual_raw_format(&self) -> PyPcmFormat {
-        self.0.actual_raw_format.into()
-    }
-
-    #[getter]
-    fn actual_naec_format(&self) -> PyPcmFormat {
-        self.0.actual_naec_format.into()
-    }
-
-    #[getter]
-    fn published_frames(&self) -> i64 {
-        self.0.published_frames
-    }
-
-    #[getter]
-    fn dropped_frames(&self) -> i64 {
-        self.0.dropped_frames
-    }
-}
-
-impl From<AudioCaptureStreamInfo> for PyAudioCaptureStreamInfo {
-    fn from(value: AudioCaptureStreamInfo) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "AudioDeviceInfo")]
-#[derive(Clone)]
-pub struct PyAudioDeviceInfo(AudioDeviceInfo);
-
-#[pymethods]
-impl PyAudioDeviceInfo {
-    #[getter]
-    fn device_id(&self) -> String {
-        self.0.device_id.clone()
-    }
-    #[getter]
-    fn display_name(&self) -> String {
-        self.0.display_name.clone()
-    }
-    #[getter]
-    fn direction(&self) -> PyAudioDeviceDirection {
-        self.0.direction.into()
-    }
-    #[getter]
-    fn transport(&self) -> PyAudioDeviceTransport {
-        self.0.transport.into()
-    }
-    #[getter]
-    fn backend_affinity(&self) -> PyAudioDeviceBackendAffinity {
-        self.0.backend_affinity.into()
-    }
-    #[getter]
-    fn is_available(&self) -> bool {
-        self.0.is_available
-    }
-    #[getter]
-    fn is_system_default(&self) -> bool {
-        self.0.is_system_default
-    }
-    #[getter]
-    fn supports_input(&self) -> bool {
-        self.0.supports_input
-    }
-    #[getter]
-    fn supports_output(&self) -> bool {
-        self.0.supports_output
-    }
-    #[getter]
-    fn provider_name(&self) -> String {
-        self.0.provider_name.clone()
-    }
-    #[getter]
-    fn native_id(&self) -> String {
-        self.0.native_id.clone()
-    }
-    #[getter]
-    fn metadata_json(&self) -> String {
-        self.0.metadata_json.clone()
-    }
-}
-
-impl From<AudioDeviceInfo> for PyAudioDeviceInfo {
-    fn from(value: AudioDeviceInfo) -> Self {
-        Self(value)
-    }
-}
-
-#[pyclass(module = "booster_sdk_bindings", name = "BluetoothDeviceInfo")]
-#[derive(Clone)]
-pub struct PyBluetoothDeviceInfo(BluetoothDeviceInfo);
-
-#[pymethods]
-impl PyBluetoothDeviceInfo {
-    #[getter]
-    fn address(&self) -> String {
-        self.0.address.clone()
-    }
-    #[getter]
-    fn name(&self) -> String {
-        self.0.name.clone()
-    }
-    #[getter]
-    fn rssi(&self) -> i16 {
-        self.0.rssi
-    }
-    #[getter]
-    fn state(&self) -> PyBluetoothDeviceState {
-        self.0.state.into()
-    }
-    #[getter]
-    fn major_class(&self) -> PyBluetoothMajorClass {
-        self.0.major_class.into()
-    }
-    #[getter]
-    fn paired(&self) -> bool {
-        self.0.paired
-    }
-    #[getter]
-    fn trusted(&self) -> bool {
-        self.0.trusted
-    }
-    #[getter]
-    fn connected(&self) -> bool {
-        self.0.connected
-    }
-    #[getter]
-    fn is_audio_sink(&self) -> bool {
-        self.0.is_audio_sink
-    }
-    #[getter]
-    fn is_audio_source(&self) -> bool {
-        self.0.is_audio_source
-    }
-    #[getter]
-    fn is_hfp_capable(&self) -> bool {
-        self.0.is_hfp_capable
-    }
+py_readonly_class!(PyBluetoothDeviceInfo, "BluetoothDeviceInfo", BluetoothDeviceInfo, {
+    address: String,
+    name: String,
+    rssi: i16,
+    state: PyBluetoothDeviceState,
+    major_class: PyBluetoothMajorClass,
+    paired: bool,
+    trusted: bool,
+    connected: bool,
+    is_audio_sink: bool,
+    is_audio_source: bool,
+    is_hfp_capable: bool,
+    linked_pulse_sink_id: String,
+    linked_pulse_source_id: String,
+    last_seen_ms: i64,
+}, {
     #[getter]
     fn connected_profiles(&self) -> Vec<PyBluetoothAudioProfile> {
         self.0
@@ -721,130 +405,429 @@ impl PyBluetoothDeviceInfo {
             .map(Into::into)
             .collect()
     }
-    #[getter]
-    fn linked_pulse_sink_id(&self) -> String {
-        self.0.linked_pulse_sink_id.clone()
+});
+
+py_readonly_class!(PyBluetoothConnectResult, "BluetoothConnectResult", BluetoothConnectResult, {
+    device: PyBluetoothDeviceInfo,
+    pulse_sink_id: String,
+    pulse_source_id: String,
+    active_profile: PyBluetoothAudioProfile,
+    pulse_endpoint_ready: bool,
+    default_sink_applied: bool,
+    default_source_applied: bool,
+    default_route_error_code: i32,
+    default_route_error_msg: String,
+});
+
+// ---------------------------------------------------------------------------
+// Topic messages
+// ---------------------------------------------------------------------------
+
+py_readonly_class!(PyAudioTopicHeader, "AudioTopicHeader", AudioTopicHeader, {
+    client_id: String,
+    request_id: String,
+    session_type: u32,
+    session_id: i64,
+    timestamp_ms: i64,
+}, {
+    fn session_type_enum(&self) -> Option<PySessionType> {
+        self.0.session_type_enum().map(Into::into)
     }
-    #[getter]
-    fn linked_pulse_source_id(&self) -> String {
-        self.0.linked_pulse_source_id.clone()
+});
+
+py_readonly_class!(PyAudioProgressTopic, "AudioProgressTopic", AudioProgressTopic, {
+    header: PyAudioTopicHeader,
+    position_bytes: i64,
+    duration_bytes: i64,
+    state: i32,
+});
+
+py_readonly_class!(PyAudioEventTopic, "AudioEventTopic", AudioEventTopic, {
+    header: PyAudioTopicHeader,
+    event_code: u32,
+    state: i32,
+    detail: String,
+}, {
+    fn event_code_enum(&self) -> Option<PyAudioEventCode> {
+        self.0.event_code_enum().map(Into::into)
     }
-    #[getter]
-    fn last_seen_ms(&self) -> i64 {
-        self.0.last_seen_ms
+});
+
+py_readonly_class!(PyAudioErrorTopic, "AudioErrorTopic", AudioErrorTopic, {
+    header: PyAudioTopicHeader,
+    ret_code: i32,
+    error_category: u32,
+    error_detail: u32,
+    ret_msg: String,
+}, {
+    fn error_category_enum(&self) -> Option<PyAudioErrorCategory> {
+        self.0.error_category_enum().map(Into::into)
     }
+
+    fn error_detail_enum(&self) -> Option<PyAudioErrorDetail> {
+        self.0.error_detail_enum().map(Into::into)
+    }
+
+    /// Convert to the C++-style `AudioError` value.
+    fn to_audio_error(&self) -> PyAudioError {
+        PyAudioError::from_rust(AudioError::from(&self.0))
+    }
+});
+
+py_readonly_class!(PyBluetoothEvent, "BluetoothEvent", BluetoothEvent, {
+    timestamp_ms: i64,
+    event_type: String,
+    address: String,
+    payload_json: String,
+    error_code: i32,
+});
+
+fn pcm_to_bytes<'py>(py: Python<'py>, samples: &[i16]) -> Bound<'py, PyBytes> {
+    let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+    PyBytes::new(py, &bytes)
 }
 
-impl From<BluetoothDeviceInfo> for PyBluetoothDeviceInfo {
-    fn from(value: BluetoothDeviceInfo) -> Self {
-        Self(value)
+py_readonly_class!(PyAudioCaptureFrame, "AudioCaptureFrame", AudioCaptureFrame, {
+    frame_seq: i64,
+    timestamp_ms: i64,
+    raw_valid: bool,
+    raw_format: PyPcmFormat,
+    raw_frame_samples_per_channel: i32,
+    raw_pcm: Vec<i16>,
+    naec_valid: bool,
+    naec_format: PyPcmFormat,
+    naec_frame_samples_per_channel: i32,
+    naec_pcm: Vec<i16>,
+}, {
+    /// Raw PCM as little-endian 16-bit bytes.
+    fn raw_pcm_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        pcm_to_bytes(py, &self.0.raw_pcm)
     }
-}
 
-#[pyclass(module = "booster_sdk_bindings", name = "BluetoothScanOptions")]
-#[derive(Clone, Copy)]
-pub struct PyBluetoothScanOptions(BluetoothScanOptions);
+    /// NAEC PCM as little-endian 16-bit bytes.
+    fn naec_pcm_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        pcm_to_bytes(py, &self.0.naec_pcm)
+    }
+});
+
+py_readonly_class!(PyAudioCaptureFrameTopic, "AudioCaptureFrameTopic", AudioCaptureFrameTopic, {
+    header: PyAudioTopicHeader,
+    frame_seq: i64,
+    raw_valid: bool,
+    raw_sample_rate_hz: i32,
+    raw_channels: i32,
+    raw_bits_per_sample: i32,
+    raw_frame_samples_per_channel: i32,
+    raw_pcm: Vec<i16>,
+    naec_valid: bool,
+    naec_sample_rate_hz: i32,
+    naec_channels: i32,
+    naec_bits_per_sample: i32,
+    naec_frame_samples_per_channel: i32,
+    naec_pcm: Vec<i16>,
+}, {
+    /// Raw PCM as little-endian 16-bit bytes.
+    fn raw_pcm_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        pcm_to_bytes(py, &self.0.raw_pcm)
+    }
+
+    /// NAEC PCM as little-endian 16-bit bytes.
+    fn naec_pcm_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        pcm_to_bytes(py, &self.0.naec_pcm)
+    }
+
+    /// Convert to the C++-style `AudioCaptureFrame`.
+    fn to_frame(&self) -> PyAudioCaptureFrame {
+        PyAudioCaptureFrame(AudioCaptureFrame::from(self.0.clone()))
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Session handles
+// ---------------------------------------------------------------------------
+
+/// One playback session (C++ `AudioPlayer`). Dropping it does not destroy
+/// the service-side session; call `destroy()`.
+#[pyclass(module = "booster_sdk_bindings", name = "AudioPlayer", unsendable)]
+pub struct PyAudioPlayer {
+    inner: Arc<AudioPlayer>,
+}
 
 #[pymethods]
-impl PyBluetoothScanOptions {
-    #[new]
-    #[pyo3(signature = (timeout_ms=30000, audio_only=true))]
-    fn new(timeout_ms: i32, audio_only: bool) -> Self {
-        Self(BluetoothScanOptions {
-            timeout_ms,
-            audio_only,
-        })
+impl PyAudioPlayer {
+    #[getter]
+    fn session_id(&self) -> Option<i64> {
+        self.inner.session_id()
+    }
+
+    fn init(&self, py: Python<'_>, options: PyPlayerInitOptions) -> PyResult<i64> {
+        let inner = Arc::clone(&self.inner);
+        let options = options.to_rust();
+        run(py, async move { inner.init(&options).await })
+    }
+
+    fn start(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.start().await })
+    }
+
+    fn pause(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.pause().await })
+    }
+
+    fn stop(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.stop().await })
+    }
+
+    fn reset(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.reset().await })
+    }
+
+    fn destroy(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.destroy().await })
+    }
+
+    fn release(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.release().await })
+    }
+
+    fn set_volume(&self, py: Python<'_>, volume: f32) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.set_volume(volume).await })
+    }
+
+    fn set_preferred_device(&self, py: Python<'_>, device_id: String) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(
+            py,
+            async move { inner.set_preferred_device(device_id).await },
+        )
+    }
+
+    fn get_info(&self, py: Python<'_>) -> PyResult<PyPlayerInfo> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.get_info().await }).map(Into::into)
+    }
+
+    /// Push raw PCM bytes to a `PCM_STREAM` player.
+    fn push_pcm_stream(&self, py: Python<'_>, data: Vec<u8>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.push_pcm_stream(&data).await })
+    }
+
+    fn cached_info(&self) -> PyPlayerInfo {
+        self.inner.cached_info().into()
+    }
+
+    fn cached_state(&self) -> PyPlayerState {
+        self.inner.cached_state().into()
+    }
+
+    fn owns(&self, header: PyRef<'_, PyAudioTopicHeader>) -> bool {
+        self.inner.owns(&header.0)
+    }
+
+    fn apply_progress(&self, progress: PyRef<'_, PyAudioProgressTopic>) -> bool {
+        self.inner.apply_progress(&progress.0)
+    }
+
+    fn apply_event(&self, event: PyRef<'_, PyAudioEventTopic>) -> bool {
+        self.inner.apply_event(&event.0)
     }
 }
 
-impl From<PyBluetoothScanOptions> for BluetoothScanOptions {
-    fn from(value: PyBluetoothScanOptions) -> Self {
-        value.0
-    }
+/// One recording session (C++ `AudioRecorder`).
+#[pyclass(module = "booster_sdk_bindings", name = "AudioRecorder", unsendable)]
+pub struct PyAudioRecorder {
+    inner: Arc<AudioRecorder>,
 }
-
-#[pyclass(module = "booster_sdk_bindings", name = "BluetoothConnectOptions")]
-#[derive(Clone)]
-pub struct PyBluetoothConnectOptions(BluetoothConnectOptions);
 
 #[pymethods]
-impl PyBluetoothConnectOptions {
-    #[new]
-    #[pyo3(signature = (address, auto_pair=true, make_default=true, preferred_profile=None, timeout_ms=15000))]
-    fn new(
-        address: String,
-        auto_pair: bool,
-        make_default: bool,
-        preferred_profile: Option<PyBluetoothAudioProfile>,
-        timeout_ms: i32,
-    ) -> Self {
-        Self(BluetoothConnectOptions {
-            address,
-            auto_pair,
-            make_default,
-            preferred_profile: preferred_profile
-                .map(Into::into)
-                .unwrap_or(BluetoothAudioProfile::None),
-            timeout_ms,
-        })
+impl PyAudioRecorder {
+    #[getter]
+    fn session_id(&self) -> Option<i64> {
+        self.inner.session_id()
+    }
+
+    fn init(&self, py: Python<'_>, options: PyRecorderInitOptions) -> PyResult<i64> {
+        let inner = Arc::clone(&self.inner);
+        let options = options.to_rust();
+        run(py, async move { inner.init(&options).await })
+    }
+
+    fn start(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.start().await })
+    }
+
+    fn pause(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.pause().await })
+    }
+
+    fn stop(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.stop().await })
+    }
+
+    fn destroy(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.destroy().await })
+    }
+
+    fn release(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.release().await })
+    }
+
+    fn set_preferred_device(&self, py: Python<'_>, device_id: String) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(
+            py,
+            async move { inner.set_preferred_device(device_id).await },
+        )
+    }
+
+    fn get_info(&self, py: Python<'_>) -> PyResult<PyRecorderInfo> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.get_info().await }).map(Into::into)
+    }
+
+    fn cached_info(&self) -> PyRecorderInfo {
+        self.inner.cached_info().into()
+    }
+
+    fn cached_state(&self) -> PyRecorderState {
+        self.inner.cached_state().into()
+    }
+
+    fn owns(&self, header: PyRef<'_, PyAudioTopicHeader>) -> bool {
+        self.inner.owns(&header.0)
+    }
+
+    fn apply_progress(&self, progress: PyRef<'_, PyAudioProgressTopic>) -> bool {
+        self.inner.apply_progress(&progress.0)
+    }
+
+    fn apply_event(&self, event: PyRef<'_, PyAudioEventTopic>) -> bool {
+        self.inner.apply_event(&event.0)
     }
 }
 
-impl From<PyBluetoothConnectOptions> for BluetoothConnectOptions {
-    fn from(value: PyBluetoothConnectOptions) -> Self {
-        value.0
-    }
+/// Direction-of-arrival localizer (C++ `AudioLocalizer`).
+#[pyclass(module = "booster_sdk_bindings", name = "AudioLocalizer", unsendable)]
+pub struct PyAudioLocalizer {
+    inner: Arc<AudioLocalizer>,
 }
-
-#[pyclass(module = "booster_sdk_bindings", name = "BluetoothConnectResult")]
-#[derive(Clone)]
-pub struct PyBluetoothConnectResult(BluetoothConnectResult);
 
 #[pymethods]
-impl PyBluetoothConnectResult {
-    #[getter]
-    fn device(&self) -> PyBluetoothDeviceInfo {
-        self.0.device.clone().into()
-    }
-    #[getter]
-    fn pulse_sink_id(&self) -> String {
-        self.0.pulse_sink_id.clone()
-    }
-    #[getter]
-    fn pulse_source_id(&self) -> String {
-        self.0.pulse_source_id.clone()
-    }
-    #[getter]
-    fn active_profile(&self) -> PyBluetoothAudioProfile {
-        self.0.active_profile.into()
-    }
-    #[getter]
-    fn pulse_endpoint_ready(&self) -> bool {
-        self.0.pulse_endpoint_ready
-    }
-    #[getter]
-    fn default_sink_applied(&self) -> bool {
-        self.0.default_sink_applied
-    }
-    #[getter]
-    fn default_source_applied(&self) -> bool {
-        self.0.default_source_applied
-    }
-    #[getter]
-    fn default_route_error_code(&self) -> i32 {
-        self.0.default_route_error_code
-    }
-    #[getter]
-    fn default_route_error_msg(&self) -> String {
-        self.0.default_route_error_msg.clone()
+impl PyAudioLocalizer {
+    /// Current DOA angle in degrees.
+    fn get_doa_angle(&self, py: Python<'_>) -> PyResult<i32> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.get_doa_angle().await })
     }
 }
 
-impl From<BluetoothConnectResult> for PyBluetoothConnectResult {
-    fn from(value: BluetoothConnectResult) -> Self {
-        Self(value)
+/// Raw/NAEC microphone PCM stream (C++ `AudioCaptureStream`).
+#[pyclass(
+    module = "booster_sdk_bindings",
+    name = "AudioCaptureStream",
+    unsendable
+)]
+pub struct PyAudioCaptureStream {
+    inner: Arc<AudioCaptureStream>,
+}
+
+#[pymethods]
+impl PyAudioCaptureStream {
+    #[getter]
+    fn session_id(&self) -> Option<i64> {
+        self.inner.session_id()
+    }
+
+    #[getter]
+    fn data_topic_name(&self) -> String {
+        self.inner.data_topic_name()
+    }
+
+    #[pyo3(signature = (options=None))]
+    fn init(
+        &self,
+        py: Python<'_>,
+        options: Option<PyAudioCaptureStreamOptions>,
+    ) -> PyResult<PyInitCaptureStreamResponse> {
+        let inner = Arc::clone(&self.inner);
+        let options = options.unwrap_or_default().to_rust();
+        run(py, async move { inner.init(&options).await }).map(Into::into)
+    }
+
+    fn start(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.start().await })
+    }
+
+    fn pause(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.pause().await })
+    }
+
+    fn stop(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.stop().await })
+    }
+
+    fn destroy(&self, py: Python<'_>) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.destroy().await })
+    }
+
+    fn set_preferred_device(&self, py: Python<'_>, device_id: String) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        run(
+            py,
+            async move { inner.set_preferred_device(device_id).await },
+        )
+    }
+
+    fn get_info(&self, py: Python<'_>) -> PyResult<PyAudioCaptureStreamInfo> {
+        let inner = Arc::clone(&self.inner);
+        run(py, async move { inner.get_info().await }).map(Into::into)
+    }
+
+    fn cached_info(&self) -> PyAudioCaptureStreamInfo {
+        self.inner.cached_info().into()
+    }
+
+    fn cached_state(&self) -> PyAudioCaptureStreamState {
+        self.inner.cached_state().into()
+    }
+
+    fn owns(&self, header: PyRef<'_, PyAudioTopicHeader>) -> bool {
+        self.inner.owns(&header.0)
+    }
+
+    fn apply_event(&self, event: PyRef<'_, PyAudioEventTopic>) -> bool {
+        self.inner.apply_event(&event.0)
+    }
+
+    /// Subscribe to this stream's PCM frames (requires a prior `init`).
+    fn subscribe_frames(&self) -> PyResult<PySubscription> {
+        self.inner
+            .subscribe_frames()
+            .map(PySubscription::of::<AudioCaptureFrameTopic, PyAudioCaptureFrameTopic>)
+            .map_err(to_py_err)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Client
+// ---------------------------------------------------------------------------
 
 #[pyclass(module = "booster_sdk_bindings", name = "AudioClient", unsendable)]
 pub struct PyAudioClient {
@@ -853,15 +836,17 @@ pub struct PyAudioClient {
 
 #[pymethods]
 impl PyAudioClient {
+    /// The audio service has no robot-name channel suffix (like C++), so
+    /// there is no `robot_name` argument.
     #[new]
-    #[pyo3(signature = (startup_wait_sec=None))]
-    fn new(startup_wait_sec: Option<f64>) -> PyResult<Self> {
-        let startup_wait = startup_wait_from_seconds(startup_wait_sec)?;
-        let client = match startup_wait {
-            Some(wait) => AudioClient::with_startup_wait(wait),
-            None => AudioClient::new(),
-        }
-        .map_err(to_py_err)?;
+    #[pyo3(signature = (startup_wait_sec=None, *, network=None, domain_id=None))]
+    fn new(
+        startup_wait_sec: Option<f64>,
+        network: Option<&Bound<'_, PyAny>>,
+        domain_id: Option<u16>,
+    ) -> PyResult<Self> {
+        let options = rpc_options(startup_wait_sec, None, network, domain_id)?;
+        let client = AudioClient::with_options(options).map_err(to_py_err)?;
         Ok(Self {
             client: Arc::new(client),
         })
@@ -869,11 +854,24 @@ impl PyAudioClient {
 
     fn init(&self, py: Python<'_>) -> PyResult<String> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.init().await }).map_err(to_py_err)
+        run(py, async move { client.init().await })
     }
 
     fn client_id(&self) -> Option<String> {
         self.client.client_id()
+    }
+
+    fn is_initialized(&self) -> bool {
+        self.client.is_initialized()
+    }
+
+    /// Drop the cached client id and RPC channels; re-registers lazily.
+    fn shutdown(&self) {
+        self.client.shutdown();
+    }
+
+    fn generate_request_id(&self) -> String {
+        self.client.generate_request_id()
     }
 
     fn init_player(
@@ -882,59 +880,52 @@ impl PyAudioClient {
         options: PyPlayerInitOptions,
     ) -> PyResult<PyInitPlayerResponse> {
         let client = Arc::clone(&self.client);
-        let options: PlayerInitOptions = options.into();
-        wait_for_future(py, async move { client.init_player(&options).await })
-            .map(Into::into)
-            .map_err(to_py_err)
+        let options = options.to_rust();
+        run(py, async move { client.init_player(&options).await }).map(Into::into)
     }
 
     fn start_player(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.start_player(session_id).await }).map_err(to_py_err)
+        run(py, async move { client.start_player(session_id).await })
     }
 
     fn pause_player(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.pause_player(session_id).await }).map_err(to_py_err)
+        run(py, async move { client.pause_player(session_id).await })
     }
 
     fn stop_player(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.stop_player(session_id).await }).map_err(to_py_err)
+        run(py, async move { client.stop_player(session_id).await })
     }
 
     fn reset_player(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.reset_player(session_id).await }).map_err(to_py_err)
+        run(py, async move { client.reset_player(session_id).await })
     }
 
     fn destroy_player(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.destroy_player(session_id).await })
-            .map_err(to_py_err)
+        run(py, async move { client.destroy_player(session_id).await })
     }
 
     fn set_player_volume(&self, py: Python<'_>, session_id: i64, volume: f32) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move {
+        run(py, async move {
             client.set_player_volume(session_id, volume).await
         })
-        .map_err(to_py_err)
     }
 
     fn get_player_info(&self, py: Python<'_>, session_id: i64) -> PyResult<PyPlayerInfo> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.get_player_info(session_id).await })
-            .map(Into::into)
-            .map_err(to_py_err)
+        run(py, async move { client.get_player_info(session_id).await }).map(Into::into)
     }
 
     fn send_pcm_data(&self, py: Python<'_>, session_id: i64, pcm_bytes: Vec<u8>) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move {
+        run(py, async move {
             client.send_pcm_data(session_id, pcm_bytes).await
         })
-        .map_err(to_py_err)
     }
 
     fn init_recorder(
@@ -943,120 +934,108 @@ impl PyAudioClient {
         options: PyRecorderInitOptions,
     ) -> PyResult<PyInitRecorderResponse> {
         let client = Arc::clone(&self.client);
-        let options: RecorderInitOptions = options.into();
-        wait_for_future(py, async move { client.init_recorder(&options).await })
-            .map(Into::into)
-            .map_err(to_py_err)
+        let options = options.to_rust();
+        run(py, async move { client.init_recorder(&options).await }).map(Into::into)
     }
 
     fn start_recorder(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.start_recorder(session_id).await })
-            .map_err(to_py_err)
+        run(py, async move { client.start_recorder(session_id).await })
     }
 
     fn pause_recorder(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.pause_recorder(session_id).await })
-            .map_err(to_py_err)
+        run(py, async move { client.pause_recorder(session_id).await })
     }
 
     fn stop_recorder(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.stop_recorder(session_id).await })
-            .map_err(to_py_err)
+        run(py, async move { client.stop_recorder(session_id).await })
     }
 
     fn destroy_recorder(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.destroy_recorder(session_id).await })
-            .map_err(to_py_err)
+        run(py, async move { client.destroy_recorder(session_id).await })
     }
 
     fn get_recorder_info(&self, py: Python<'_>, session_id: i64) -> PyResult<PyRecorderInfo> {
         let client = Arc::clone(&self.client);
-        wait_for_future(
+        run(
             py,
             async move { client.get_recorder_info(session_id).await },
         )
         .map(Into::into)
-        .map_err(to_py_err)
     }
 
     fn get_doa_angle(&self, py: Python<'_>) -> PyResult<i32> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.get_doa_angle().await }).map_err(to_py_err)
+        run(py, async move { client.get_doa_angle().await })
     }
 
     fn set_system_volume(&self, py: Python<'_>, volume: f32) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.set_system_volume(volume).await })
-            .map_err(to_py_err)
+        run(py, async move { client.set_system_volume(volume).await })
     }
 
     fn get_system_volume(&self, py: Python<'_>) -> PyResult<f32> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.get_system_volume().await }).map_err(to_py_err)
+        run(py, async move { client.get_system_volume().await })
     }
 
     fn set_system_mute(&self, py: Python<'_>, mute: bool) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.set_system_mute(mute).await }).map_err(to_py_err)
+        run(py, async move { client.set_system_mute(mute).await })
     }
 
     fn get_system_mute(&self, py: Python<'_>) -> PyResult<bool> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.get_system_mute().await }).map_err(to_py_err)
+        run(py, async move { client.get_system_mute().await })
     }
 
+    #[pyo3(signature = (options=None))]
     fn init_capture_stream(
         &self,
         py: Python<'_>,
-        options: PyAudioCaptureStreamOptions,
+        options: Option<PyAudioCaptureStreamOptions>,
     ) -> PyResult<PyInitCaptureStreamResponse> {
         let client = Arc::clone(&self.client);
-        let options: AudioCaptureStreamOptions = options.into();
-        wait_for_future(
+        let options = options.unwrap_or_default().to_rust();
+        run(
             py,
             async move { client.init_capture_stream(&options).await },
         )
         .map(Into::into)
-        .map_err(to_py_err)
     }
 
     fn start_capture_stream(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(
+        run(
             py,
             async move { client.start_capture_stream(session_id).await },
         )
-        .map_err(to_py_err)
     }
 
     fn pause_capture_stream(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(
+        run(
             py,
             async move { client.pause_capture_stream(session_id).await },
         )
-        .map_err(to_py_err)
     }
 
     fn stop_capture_stream(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(
+        run(
             py,
             async move { client.stop_capture_stream(session_id).await },
         )
-        .map_err(to_py_err)
     }
 
     fn destroy_capture_stream(&self, py: Python<'_>, session_id: i64) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move {
+        run(py, async move {
             client.destroy_capture_stream(session_id).await
         })
-        .map_err(to_py_err)
     }
 
     fn get_capture_stream_info(
@@ -1065,11 +1044,10 @@ impl PyAudioClient {
         session_id: i64,
     ) -> PyResult<PyAudioCaptureStreamInfo> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move {
+        run(py, async move {
             client.get_capture_stream_info(session_id).await
         })
         .map(Into::into)
-        .map_err(to_py_err)
     }
 
     fn get_devices(
@@ -1078,12 +1056,25 @@ impl PyAudioClient {
         query_type: PyAudioDeviceQueryType,
     ) -> PyResult<Vec<PyAudioDeviceInfo>> {
         let client = Arc::clone(&self.client);
-        wait_for_future(
+        run(
             py,
             async move { client.get_devices(query_type.into()).await },
         )
         .map(|devices| devices.into_iter().map(Into::into).collect())
-        .map_err(to_py_err)
+    }
+
+    /// Select the input/output endpoint (an `AudioDeviceInfo.device_id`) of a
+    /// player, recorder or capture-stream session.
+    fn set_preferred_device(
+        &self,
+        py: Python<'_>,
+        session_id: i64,
+        device_id: String,
+    ) -> PyResult<()> {
+        let client = Arc::clone(&self.client);
+        run(py, async move {
+            client.set_preferred_device(session_id, device_id).await
+        })
     }
 
     #[pyo3(signature = (options=None))]
@@ -1093,17 +1084,16 @@ impl PyAudioClient {
         options: Option<PyBluetoothScanOptions>,
     ) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        let options: BluetoothScanOptions = options.map(Into::into).unwrap_or_default();
-        wait_for_future(
+        let options = options.unwrap_or_default().to_rust();
+        run(
             py,
             async move { client.start_bluetooth_scan(&options).await },
         )
-        .map_err(to_py_err)
     }
 
     fn stop_bluetooth_scan(&self, py: Python<'_>) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move { client.stop_bluetooth_scan().await }).map_err(to_py_err)
+        run(py, async move { client.stop_bluetooth_scan().await })
     }
 
     #[pyo3(signature = (include_unpaired=true))]
@@ -1113,11 +1103,10 @@ impl PyAudioClient {
         include_unpaired: bool,
     ) -> PyResult<Vec<PyBluetoothDeviceInfo>> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move {
+        run(py, async move {
             client.get_bluetooth_devices(include_unpaired).await
         })
         .map(|devices| devices.into_iter().map(Into::into).collect())
-        .map_err(to_py_err)
     }
 
     fn connect_bluetooth_device(
@@ -1126,30 +1115,130 @@ impl PyAudioClient {
         options: PyBluetoothConnectOptions,
     ) -> PyResult<PyBluetoothConnectResult> {
         let client = Arc::clone(&self.client);
-        let options: BluetoothConnectOptions = options.into();
-        wait_for_future(py, async move {
+        let options = options.to_rust();
+        run(py, async move {
             client.connect_bluetooth_device(&options).await
         })
         .map(Into::into)
-        .map_err(to_py_err)
     }
 
     fn disconnect_bluetooth_device(&self, py: Python<'_>, address: String) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(py, async move {
+        run(py, async move {
             client.disconnect_bluetooth_device(address).await
         })
-        .map_err(to_py_err)
     }
 
     fn forget_bluetooth_device(&self, py: Python<'_>, address: String) -> PyResult<()> {
         let client = Arc::clone(&self.client);
-        wait_for_future(
+        run(
             py,
             async move { client.forget_bluetooth_device(address).await },
         )
-        .map_err(to_py_err)
     }
+
+    /// Create an uninitialized player handle (C++ `CreatePlayer`).
+    fn create_player(&self) -> PyAudioPlayer {
+        PyAudioPlayer {
+            inner: Arc::new(self.client.create_player()),
+        }
+    }
+
+    /// Wrap an existing service-side player session.
+    fn attach_player(&self, session_id: i64) -> PyAudioPlayer {
+        PyAudioPlayer {
+            inner: Arc::new(AudioPlayer::attach(Arc::clone(&self.client), session_id)),
+        }
+    }
+
+    /// Create an uninitialized recorder handle (C++ `CreateRecorder`).
+    fn create_recorder(&self) -> PyAudioRecorder {
+        PyAudioRecorder {
+            inner: Arc::new(self.client.create_recorder()),
+        }
+    }
+
+    /// Wrap an existing service-side recorder session.
+    fn attach_recorder(&self, session_id: i64) -> PyAudioRecorder {
+        PyAudioRecorder {
+            inner: Arc::new(AudioRecorder::attach(Arc::clone(&self.client), session_id)),
+        }
+    }
+
+    /// Create a DOA localizer (C++ `CreateLocalizer`).
+    fn create_localizer(&self) -> PyAudioLocalizer {
+        PyAudioLocalizer {
+            inner: Arc::new(self.client.create_localizer()),
+        }
+    }
+
+    /// Create an uninitialized capture stream handle (C++ `CreateCaptureStream`).
+    fn create_capture_stream(&self) -> PyAudioCaptureStream {
+        PyAudioCaptureStream {
+            inner: Arc::new(self.client.create_capture_stream()),
+        }
+    }
+
+    /// Wrap an existing service-side capture stream session.
+    fn attach_capture_stream(
+        &self,
+        session_id: i64,
+        data_topic_name: String,
+    ) -> PyAudioCaptureStream {
+        PyAudioCaptureStream {
+            inner: Arc::new(AudioCaptureStream::attach(
+                Arc::clone(&self.client),
+                session_id,
+                data_topic_name,
+            )),
+        }
+    }
+
+    /// Subscribe to Bluetooth lifecycle events.
+    fn subscribe_bluetooth_events(&self) -> PyResult<PySubscription> {
+        self.client
+            .subscribe_bluetooth_events()
+            .map(PySubscription::of::<BluetoothEvent, PyBluetoothEvent>)
+            .map_err(to_py_err)
+    }
+
+    /// Subscribe to playback/recording progress (`rt/booster/audio/progress`).
+    fn subscribe_progress(&self) -> PyResult<PySubscription> {
+        self.client
+            .subscribe_progress()
+            .map(PySubscription::of::<AudioProgressTopic, PyAudioProgressTopic>)
+            .map_err(to_py_err)
+    }
+
+    /// Subscribe to session lifecycle events (`rt/booster/audio/events`).
+    fn subscribe_events(&self) -> PyResult<PySubscription> {
+        self.client
+            .subscribe_events()
+            .map(PySubscription::of::<AudioEventTopic, PyAudioEventTopic>)
+            .map_err(to_py_err)
+    }
+
+    /// Subscribe to service errors (`rt/booster/audio/errors`).
+    fn subscribe_errors(&self) -> PyResult<PySubscription> {
+        self.client
+            .subscribe_errors()
+            .map(PySubscription::of::<AudioErrorTopic, PyAudioErrorTopic>)
+            .map_err(to_py_err)
+    }
+
+    /// Subscribe to a capture stream's PCM frames by its `data_topic_name`.
+    fn subscribe_capture_frames(&self, data_topic_name: &str) -> PyResult<PySubscription> {
+        self.client
+            .subscribe_capture_frames(data_topic_name)
+            .map(PySubscription::of::<AudioCaptureFrameTopic, PyAudioCaptureFrameTopic>)
+            .map_err(to_py_err)
+    }
+}
+
+/// DDS topic name of a capture stream's `data_topic_name`.
+#[pyfunction(name = "capture_frame_topic_name")]
+fn py_capture_frame_topic_name(data_topic_name: &str) -> String {
+    capture_frame_topic_name(data_topic_name)
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1158,28 +1247,56 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPlayerState>()?;
     m.add_class::<PyRecorderState>()?;
     m.add_class::<PyAudioCaptureStreamState>()?;
+    m.add_class::<PyAudioDeviceQueryType>()?;
+    m.add_class::<PyAudioDeviceDirection>()?;
+    m.add_class::<PyAudioDeviceTransport>()?;
+    m.add_class::<PyAudioDeviceBackendAffinity>()?;
+    m.add_class::<PyBluetoothScanState>()?;
+    m.add_class::<PyBluetoothDeviceState>()?;
+    m.add_class::<PyBluetoothMajorClass>()?;
+    m.add_class::<PyBluetoothAudioProfile>()?;
+    m.add_class::<PySessionType>()?;
+    m.add_class::<PyAudioErrorCode>()?;
+    m.add_class::<PyAudioEventCode>()?;
+    m.add_class::<PyAudioErrorCategory>()?;
+    m.add_class::<PyAudioErrorDetail>()?;
+
     m.add_class::<PyPcmFormat>()?;
     m.add_class::<PyPlayerInitOptions>()?;
     m.add_class::<PyRecorderInitOptions>()?;
     m.add_class::<PyAudioCaptureStreamOptions>()?;
+    m.add_class::<PyBluetoothScanOptions>()?;
+    m.add_class::<PyBluetoothConnectOptions>()?;
+    m.add_class::<PyAudioError>()?;
+
     m.add_class::<PyInitPlayerResponse>()?;
     m.add_class::<PyInitRecorderResponse>()?;
     m.add_class::<PyInitCaptureStreamResponse>()?;
     m.add_class::<PyPlayerInfo>()?;
     m.add_class::<PyRecorderInfo>()?;
     m.add_class::<PyAudioCaptureStreamInfo>()?;
-    m.add_class::<PyAudioDeviceQueryType>()?;
-    m.add_class::<PyAudioDeviceDirection>()?;
-    m.add_class::<PyAudioDeviceTransport>()?;
-    m.add_class::<PyAudioDeviceBackendAffinity>()?;
-    m.add_class::<PyBluetoothDeviceState>()?;
-    m.add_class::<PyBluetoothMajorClass>()?;
-    m.add_class::<PyBluetoothAudioProfile>()?;
     m.add_class::<PyAudioDeviceInfo>()?;
     m.add_class::<PyBluetoothDeviceInfo>()?;
-    m.add_class::<PyBluetoothScanOptions>()?;
-    m.add_class::<PyBluetoothConnectOptions>()?;
     m.add_class::<PyBluetoothConnectResult>()?;
+
+    m.add_class::<PyAudioTopicHeader>()?;
+    m.add_class::<PyAudioProgressTopic>()?;
+    m.add_class::<PyAudioEventTopic>()?;
+    m.add_class::<PyAudioErrorTopic>()?;
+    m.add_class::<PyBluetoothEvent>()?;
+    m.add_class::<PyAudioCaptureFrame>()?;
+    m.add_class::<PyAudioCaptureFrameTopic>()?;
+
+    m.add_class::<PyAudioPlayer>()?;
+    m.add_class::<PyAudioRecorder>()?;
+    m.add_class::<PyAudioLocalizer>()?;
+    m.add_class::<PyAudioCaptureStream>()?;
     m.add_class::<PyAudioClient>()?;
+
+    m.add_function(wrap_pyfunction!(py_capture_frame_topic_name, m)?)?;
+    m.add("AUDIO_ERR_NOT_SUPPORTED", AUDIO_ERR_NOT_SUPPORTED)?;
+    m.add("AUDIO_PROGRESS_TOPIC", AUDIO_PROGRESS_TOPIC)?;
+    m.add("AUDIO_EVENT_TOPIC", AUDIO_EVENT_TOPIC)?;
+    m.add("AUDIO_ERROR_TOPIC", AUDIO_ERROR_TOPIC)?;
     Ok(())
 }

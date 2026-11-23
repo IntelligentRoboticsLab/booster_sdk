@@ -2,6 +2,7 @@ mod ai;
 mod audio;
 mod booster;
 mod camera;
+mod device;
 mod handeye_calib;
 mod light_control;
 mod lui;
@@ -13,6 +14,7 @@ use pyo3::{Bound, PyResult, types::PyModule};
 pub(crate) fn register_classes(m: &Bound<'_, PyModule>) -> PyResult<()> {
     booster::register(m)?;
     camera::register(m)?;
+    device::register(m)?;
     handeye_calib::register(m)?;
     ai::register(m)?;
     audio::register(m)?;
