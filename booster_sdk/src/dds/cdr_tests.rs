@@ -81,19 +81,29 @@ fn low_cmd_layout() {
 fn enum_fields_are_32_bit() {
     let msg = ButtonEventMsg {
         button: 3,
-        event: ButtonEventType::LongPressEnd,
+        event: ButtonEventType::LongPressEnd.into(),
     };
     let (decoded, bytes) = round_trip(&msg);
     assert_eq!(decoded, msg);
     assert_eq!(bytes, [3, 0, 0, 0, 7, 0, 0, 0]);
 
     let fall = FallDownState {
-        fall_down_state: FallDownStateType::HasFallen,
+        fall_down_state: FallDownStateType::HasFallen.into(),
         is_recovery_available: true,
     };
     let (decoded, bytes) = round_trip(&fall);
     assert_eq!(decoded, fall);
     assert_eq!(bytes, [2, 0, 0, 0, 1]);
+}
+
+#[test]
+fn unknown_enum_value_keeps_the_sample() {
+    // A button event kind added by newer firmware (value 99).
+    let bytes = [3, 0, 0, 0, 99, 0, 0, 0];
+    let (msg, _) = from_bytes::<ButtonEventMsg, LittleEndian>(&bytes).expect("deserialize");
+    assert_eq!(msg.button, 3);
+    assert_eq!(msg.event.get(), None);
+    assert_eq!(msg.event.raw(), 99);
 }
 
 #[test]
@@ -158,7 +168,7 @@ fn robot_model_round_trip() {
         }],
         joints: vec![Joint {
             name: "head_yaw".into(),
-            r#type: JointType::Revolute,
+            r#type: JointType::Revolute.into(),
             ..Joint::default()
         }],
     };

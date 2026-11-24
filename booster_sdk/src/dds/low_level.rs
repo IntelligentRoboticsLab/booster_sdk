@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::types::{
-    Action, BodyControl, CmdType, FallDownStateType, ProneBodyControlPosture, RobotMode,
+    Action, BodyControl, CmdType, EnumValue, FallDownStateType, ProneBodyControlPosture, RobotMode,
 };
 
 use super::ros::Header;
@@ -115,7 +115,8 @@ pub struct Odometer {
 /// (`booster_interface::msg::FallDownState`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct FallDownState {
-    pub fall_down_state: FallDownStateType,
+    /// Fall state; use `.get()` to decode.
+    pub fall_down_state: EnumValue<FallDownStateType>,
     pub is_recovery_available: bool,
 }
 

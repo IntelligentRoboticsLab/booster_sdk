@@ -1688,7 +1688,13 @@ class ButtonEventMsg:
     @property
     def button(self) -> int: ...
     @property
-    def event(self) -> ButtonEventType: ...
+    def event(self) -> ButtonEventType | None:
+        """Decoded event kind, or ``None`` if the value is unknown to this SDK."""
+        ...
+    @property
+    def event_raw(self) -> int:
+        """Raw event value as sent by the robot."""
+        ...
 
 class RemoteControllerState:
     """Remote controller (gamepad) state."""
@@ -1785,7 +1791,13 @@ class FallDownState:
     """Fall and recovery state (``rt/fall_down``)."""
 
     @property
-    def fall_down_state(self) -> FallDownStateType: ...
+    def fall_down_state(self) -> FallDownStateType | None:
+        """Decoded fall state, or ``None`` if the value is unknown to this SDK."""
+        ...
+    @property
+    def fall_down_state_raw(self) -> int:
+        """Raw fall state value as sent by the robot."""
+        ...
     @property
     def is_recovery_available(self) -> bool: ...
 

@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ButtonEventType, RemoteControllerEvent};
+use crate::types::{ButtonEventType, EnumValue, RemoteControllerEvent};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RpcReqMsg {
@@ -97,7 +97,8 @@ pub struct BatteryState {
 pub struct ButtonEventMsg {
     /// Button identifier.
     pub button: i32,
-    pub event: ButtonEventType,
+    /// Button event kind; use `.get()` to decode.
+    pub event: EnumValue<ButtonEventType>,
 }
 
 /// Remote controller (gamepad) state

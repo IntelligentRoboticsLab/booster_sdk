@@ -12,6 +12,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::ros::{Point, Vector3};
+use crate::types::EnumValue;
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -171,7 +172,7 @@ pub struct CameraIntrinsics {
 pub struct VideoStreamEncoding {
     pub width: u32,
     pub height: u32,
-    pub format: CameraPixelFormat,
+    pub format: EnumValue<CameraPixelFormat>,
     pub bitrate_bps: u32,
 }
 
@@ -180,7 +181,7 @@ pub struct VideoStreamEncoding {
 pub struct DepthStreamEncoding {
     pub width: u32,
     pub height: u32,
-    pub format: DepthPixelFormat,
+    pub format: EnumValue<DepthPixelFormat>,
 }
 
 /// Camera description (`booster_interface::msg::Camera`).
@@ -189,9 +190,9 @@ pub struct Camera {
     pub name: String,
     pub frame_id: String,
     pub serial_number: String,
-    pub pos: CameraPos,
-    pub model: CameraModel,
-    pub state: CameraConnectionState,
+    pub pos: EnumValue<CameraPos>,
+    pub model: EnumValue<CameraModel>,
+    pub state: EnumValue<CameraConnectionState>,
     pub topics: CameraTopic,
     pub depth_scale: f64,
     pub extrinsics: CameraExtrinsics,
@@ -214,8 +215,8 @@ pub struct CameraList {
 /// Not to be confused with [`crate::types::Hand`], which selects a side.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Hand {
-    pub model: HandModel,
-    pub pos: HandPos,
+    pub model: EnumValue<HandModel>,
+    pub pos: EnumValue<HandPos>,
 }
 
 /// List of installed hands (`booster_interface::msg::HandList`).
@@ -230,7 +231,7 @@ pub struct ImuInfo {
     pub index: i32,
     pub name: String,
     pub mount_position: String,
-    pub model: ImuModel,
+    pub model: EnumValue<ImuModel>,
 }
 
 /// List of IMUs (`booster_interface::msg::ImuInfoList`).
@@ -300,7 +301,7 @@ pub struct Mesh {
 /// (`booster_interface::msg::Geometry`).
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Geometry {
-    pub r#type: GeometryType,
+    pub r#type: EnumValue<GeometryType>,
     #[serde(rename = "box")]
     pub box_: BoxShape,
     pub cylinder: Cylinder,
@@ -336,7 +337,7 @@ pub struct JointLimit {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Joint {
     pub name: String,
-    pub r#type: JointType,
+    pub r#type: EnumValue<JointType>,
     pub parent_link: String,
     pub child_link: String,
     pub origin: Origin,

@@ -152,7 +152,18 @@ py_readonly_class!(PyBatteryState, "BatteryState", BatteryState, {
 
 py_readonly_class!(PyButtonEventMsg, "ButtonEventMsg", ButtonEventMsg, {
     button: i32,
-    event: PyButtonEventType,
+}, {
+    /// Decoded event kind, or `None` if this SDK does not know the value.
+    #[getter]
+    fn event(&self) -> Option<PyButtonEventType> {
+        self.0.event.get().map(Into::into)
+    }
+
+    /// Raw event value as sent by the robot.
+    #[getter]
+    fn event_raw(&self) -> u32 {
+        self.0.event.raw()
+    }
 });
 
 py_readonly_class!(PyRemoteControllerState, "RemoteControllerState", RemoteControllerState, {
@@ -225,8 +236,19 @@ py_readonly_class!(PyBinaryData, "BinaryData", BinaryData, {
 // ---------------------------------------------------------------------------
 
 py_readonly_class!(PyFallDownState, "FallDownState", FallDownState, {
-    fall_down_state: PyFallDownStateType,
     is_recovery_available: bool,
+}, {
+    /// Decoded fall state, or `None` if this SDK does not know the value.
+    #[getter]
+    fn fall_down_state(&self) -> Option<PyFallDownStateType> {
+        self.0.fall_down_state.get().map(Into::into)
+    }
+
+    /// Raw fall state value as sent by the robot.
+    #[getter]
+    fn fall_down_state_raw(&self) -> u32 {
+        self.0.fall_down_state.raw()
+    }
 });
 
 py_readonly_class!(PyRobotStatesMsg, "RobotStatesMsg", RobotStatesMsg, {
