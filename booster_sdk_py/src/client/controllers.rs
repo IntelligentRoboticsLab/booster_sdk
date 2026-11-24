@@ -6,6 +6,7 @@
 //! sends a zero-velocity command) and raises `KeyboardInterrupt`.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use booster_sdk::{
     client::{
@@ -180,10 +181,11 @@ impl PyMoveController {
 
 impl Drop for PyMoveController {
     fn drop(&mut self) {
-        if let Some(controller) = self.inner.take() {
-            // The core `Drop` sends a best-effort stop on the current runtime.
-            let _guard = get_tokio_runtime().enter();
-            drop(controller);
+        if let Some(mut controller) = self.inner.take() {
+            // Stop the robot before returning, so it is sent even when the
+            // interpreter exits right after (the core `Drop` only schedules
+            // it in the background).
+            close_on_drop(async move { controller.close().await });
         }
     }
 }
@@ -299,13 +301,32 @@ impl PyArmController {
 
 impl Drop for PyArmController {
     fn drop(&mut self) {
-        if let Some(controller) = self.inner.take() {
-            // The core `Drop` disables upper-body custom control on the
-            // current runtime (best effort).
-            let _guard = get_tokio_runtime().enter();
-            drop(controller);
+        if let Some(mut controller) = self.inner.take() {
+            // Disable upper-body custom control before returning (see
+            // `PyMoveController::drop`).
+            close_on_drop(async move { controller.close().await });
         }
     }
+}
+
+/// Upper bound on the cleanup a controller runs when garbage-collected
+/// without `close()`, so interpreter exit can't hang on an unreachable robot.
+const DROP_CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Run a controller's `close()` synchronously from `Drop`, bounded by
+/// [`DROP_CLOSE_TIMEOUT`]. If it times out, the controller is dropped and its
+/// core `Drop` falls back to a background best-effort cleanup.
+fn close_on_drop<F>(close: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    if tokio::runtime::Handle::try_current().is_ok() {
+        // Can't block inside a runtime: hand off to the global runtime.
+        get_tokio_runtime().spawn(close);
+        return;
+    }
+    // No Python code runs here, so blocking with the GIL held is safe.
+    let _ = get_tokio_runtime().block_on(tokio::time::timeout(DROP_CLOSE_TIMEOUT, close));
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
