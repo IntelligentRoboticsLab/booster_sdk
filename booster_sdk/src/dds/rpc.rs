@@ -6,14 +6,15 @@
 //! - responses are `RpcRespMsg { uuid, header, body }` on `<channel>Resp`,
 //!   where `uuid` echoes the request and `header` is `{"status": <int>}`.
 
-use futures::{FutureExt, StreamExt};
+use futures::StreamExt;
 use rustdds::no_key::{DataReaderEventStream, DataReaderStream};
 use rustdds::{DataReaderStatus, DataWriterStatus, StatusEvented};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 use uuid::Uuid;
 
 use crate::types::{DdsError, RPC_STATUS_CODE_INVALID, RPC_STATUS_CODE_TIMEOUT, Result, RpcError};
@@ -271,12 +272,20 @@ pub(crate) fn json_i64(value: Option<&Value>) -> Option<i64> {
     }
 }
 
+/// Extra delay after the first service match before the first request, so
+/// the remote side can finish discovering our writer.
+const STARTUP_MATCH_GRACE: Duration = Duration::from_millis(150);
+
 /// Tracks how many remote endpoints are currently matched, fed from RustDDS
-/// status events (each event is delivered once, so the count must be kept).
+/// status events.
+///
+/// RustDDS delivers each match/unmatch edge once, through a small bounded
+/// channel (4 events for writers) that silently drops events when full. The
+/// channel must therefore be drained continuously (see [`MatchWatcher`]), or
+/// the count can go permanently stale.
 #[derive(Debug, Default)]
 pub(crate) struct MatchCount {
     current: AtomicI32,
-    drain_lock: std::sync::Mutex<()>,
 }
 
 impl MatchCount {
@@ -288,23 +297,9 @@ impl MatchCount {
         self.current.store(count, Ordering::SeqCst);
     }
 
-    pub(crate) fn drain_writer<T: Serialize>(&self, writer: &rustdds::no_key::DataWriter<T>) {
-        let Ok(_guard) = self.drain_lock.lock() else {
-            return;
-        };
-        while let Some(status) = writer.try_recv_status() {
-            if let DataWriterStatus::PublicationMatched { current, .. } = status {
-                self.set(current.count());
-            }
-        }
-    }
-
-    fn drain_reader_events<T: 'static>(&self, events: &std::sync::Mutex<DataReaderEventStream<T>>) {
-        let Ok(mut events) = events.lock() else {
-            return;
-        };
-        while let Some(Some(status)) = events.next().now_or_never() {
-            self.apply_reader_status(&status);
+    pub(crate) fn apply_writer_status(&self, status: &DataWriterStatus) {
+        if let DataWriterStatus::PublicationMatched { current, .. } = status {
+            self.set(current.count());
         }
     }
 
@@ -312,6 +307,58 @@ impl MatchCount {
         if let DataReaderStatus::SubscriptionMatched { current, .. } = status {
             self.set(current.count());
         }
+    }
+}
+
+/// Background thread that continuously drains an [`RpcClient`]'s request
+/// writer and response reader status events into [`MatchCount`]s, so no
+/// match/unmatch edge is dropped while the client is idle. Stops when dropped.
+struct MatchWatcher {
+    stop: Arc<AtomicBool>,
+    wake: Arc<Notify>,
+}
+
+impl MatchWatcher {
+    fn spawn(
+        service_topic: &str,
+        writer: Arc<rustdds::no_key::DataWriter<RpcReqMsg>>,
+        mut response_events: DataReaderEventStream<RpcRespMsg>,
+        request_matches: Arc<MatchCount>,
+        response_matches: Arc<MatchCount>,
+    ) -> Result<Self> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let wake = Arc::new(Notify::new());
+        let thread_stop = Arc::clone(&stop);
+        let thread_wake = Arc::clone(&wake);
+        std::thread::Builder::new()
+            .name(format!("dds-rpc-status:{service_topic}"))
+            .spawn(move || {
+                let mut writer_events = writer.as_async_status_stream();
+                futures::executor::block_on(async move {
+                    while !thread_stop.load(Ordering::Acquire) {
+                        tokio::select! {
+                            biased;
+                            () = thread_wake.notified() => {}
+                            Some(status) = writer_events.next() => {
+                                request_matches.apply_writer_status(&status);
+                            }
+                            Some(status) = response_events.next() => {
+                                response_matches.apply_reader_status(&status);
+                            }
+                            else => break,
+                        }
+                    }
+                });
+            })
+            .map_err(|err| DdsError::InitializationFailed(err.to_string()))?;
+        Ok(Self { stop, wake })
+    }
+}
+
+impl Drop for MatchWatcher {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        self.wake.notify_one();
     }
 }
 
@@ -445,11 +492,11 @@ impl RpcClientOptions {
 
 pub struct RpcClient {
     node: DdsNode,
-    request_writer: rustdds::no_key::DataWriter<RpcReqMsg>,
+    request_writer: Arc<rustdds::no_key::DataWriter<RpcReqMsg>>,
     response_stream: Mutex<DataReaderStream<RpcRespMsg>>,
-    response_events: std::sync::Mutex<DataReaderEventStream<RpcRespMsg>>,
-    request_matches: MatchCount,
-    response_matches: MatchCount,
+    request_matches: Arc<MatchCount>,
+    response_matches: Arc<MatchCount>,
+    _match_watcher: MatchWatcher,
     default_timeout: Duration,
     startup_wait: Duration,
     startup_wait_done: AtomicBool,
@@ -538,14 +585,24 @@ impl RpcClient {
             .subscribe_reader::<RpcRespMsg>(&response_topic)?
             .async_sample_stream();
         let response_events = response_stream.async_event_stream();
+        let request_writer = Arc::new(request_writer.into_inner());
+        let request_matches = Arc::new(MatchCount::default());
+        let response_matches = Arc::new(MatchCount::default());
+        let match_watcher = MatchWatcher::spawn(
+            &service_topic,
+            Arc::clone(&request_writer),
+            response_events,
+            Arc::clone(&request_matches),
+            Arc::clone(&response_matches),
+        )?;
 
         Ok(Self {
             node: node.clone(),
-            request_writer: request_writer.into_inner(),
+            request_writer,
             response_stream: Mutex::new(response_stream),
-            response_events: std::sync::Mutex::new(response_events),
-            request_matches: MatchCount::default(),
-            response_matches: MatchCount::default(),
+            request_matches,
+            response_matches,
+            _match_watcher: match_watcher,
             default_timeout: options.default_timeout,
             startup_wait: options.startup_wait,
             startup_wait_done: AtomicBool::new(false),
@@ -759,16 +816,8 @@ impl RpcClient {
     /// writer.
     #[must_use]
     pub fn is_service_matched(&self, require_response_path: bool) -> bool {
-        self.request_matches.drain_writer(&self.request_writer);
-        if !self.request_matches.is_matched() {
-            return false;
-        }
-        if require_response_path {
-            self.response_matches
-                .drain_reader_events(&self.response_events);
-            return self.response_matches.is_matched();
-        }
-        true
+        self.request_matches.is_matched()
+            && (!require_response_path || self.response_matches.is_matched())
     }
 
     /// Wait until the service endpoints are discovered (C++ `WaitForService`).
@@ -831,17 +880,24 @@ impl RpcClient {
     ) -> Result<String> {
         if self.startup_wait > Duration::from_millis(0)
             && !self.startup_wait_done.swap(true, Ordering::SeqCst)
-            && !self.wait_for_service(self.startup_wait, false).await
         {
             // Requests are volatile, so a request sent before the match is
             // silently lost. Responses are transient-local, so the response
             // side needs no wait.
-            tracing::warn!(
-                target: "booster_sdk::rpc",
-                service_topic = %self.service_topic,
-                startup_wait_ms = self.startup_wait.as_millis(),
-                "rpc service not discovered within startup wait, sending anyway"
-            );
+            if self.wait_for_service(self.startup_wait, false).await {
+                // Our writer matching the service's reader does not mean the
+                // service has matched our writer yet; with a best-effort
+                // reader the first request could still be dropped. Give the
+                // remote side a moment to finish discovery.
+                tokio::time::sleep(STARTUP_MATCH_GRACE).await;
+            } else {
+                tracing::warn!(
+                    target: "booster_sdk::rpc",
+                    service_topic = %self.service_topic,
+                    startup_wait_ms = self.startup_wait.as_millis(),
+                    "rpc service not discovered within startup wait, sending anyway"
+                );
+            }
         }
 
         // Single-flight per client: one response stream consumer at a time.

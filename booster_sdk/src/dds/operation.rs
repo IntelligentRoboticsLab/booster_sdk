@@ -30,6 +30,10 @@ use super::topics::{TYPE_RPC_RESP, TopicSpec};
 /// Default time to wait for the service to accept an operation.
 pub const DEFAULT_OPERATION_START_TIMEOUT: Duration = Duration::from_millis(1000);
 
+/// Minimum time an operation start waits for the event reader to match the
+/// service's event writer (endpoint discovery after the client is created).
+const EVENT_MATCH_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// Event topic for an operation-capable RPC service.
 pub fn operation_event_topic(name: &str) -> TopicSpec {
     TopicSpec {
@@ -416,6 +420,20 @@ impl RpcOperationClient {
         body: String,
         start_timeout: Duration,
     ) -> Result<ApiOperation> {
+        // Events are volatile: anything published before our event reader
+        // matches the service's event writer is never delivered, so a fast
+        // operation's final result would be lost. C++ `AsyncSendApiRequest`
+        // refuses to start until the event reader is matched; we wait up to
+        // `start_timeout` (at least `EVENT_MATCH_TIMEOUT`, since the
+        // operation client is created lazily on first use) for the match.
+        let match_timeout = start_timeout.max(EVENT_MATCH_TIMEOUT);
+        if !poll_until(match_timeout, || self.is_event_path_matched()).await {
+            return Err(RpcError::RemoteTimeout(
+                "operation event channel is not matched; is the service running?".to_owned(),
+            )
+            .into());
+        }
+
         let (sender, events) = mpsc::unbounded_channel();
 
         // Register before sending so early events are not lost.

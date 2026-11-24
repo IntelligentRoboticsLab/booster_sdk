@@ -417,16 +417,15 @@ where
     T: Serialize,
 {
     pub fn write(&self, message: T) -> Result<()> {
+        // Drain match events on every write: RustDDS drops status events once
+        // its small (4-entry) channel is full.
+        self.drain_match_events();
         self.writer
             .write(message, None)
             .map_err(|err| DdsError::PublishFailed(err.to_string()).into())
     }
 
-    /// Number of remote/local readers currently matched with this writer.
-    ///
-    /// Derived from `PublicationMatched` status events (RustDDS does not
-    /// implement the direct query), so it reflects events seen so far.
-    pub fn matched_subscriptions(&self) -> usize {
+    fn drain_match_events(&self) {
         while let Some(status) = self.writer.try_recv_status() {
             if let DataWriterStatus::PublicationMatched { current, .. } = status {
                 self.matched.store(
@@ -435,6 +434,17 @@ where
                 );
             }
         }
+    }
+
+    /// Number of remote/local readers currently matched with this writer.
+    ///
+    /// Derived from `PublicationMatched` status events (RustDDS does not
+    /// implement the direct query). Events are drained on every
+    /// [`write`](Self::write) and on this call; RustDDS keeps at most 4
+    /// undrained events, so a publisher that sits idle through many
+    /// match/unmatch changes may report a stale count until the next change.
+    pub fn matched_subscriptions(&self) -> usize {
+        self.drain_match_events();
         self.matched.load(Ordering::Relaxed)
     }
 
